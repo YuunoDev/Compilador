@@ -107,6 +107,9 @@ def sync_scroll(*args):
 root = Tk()
 root.title("Mi editor")
 
+# Color de fondo de la ventana principal
+root.configure(bg="#1e1e1e")  # Fondo oscuro
+
 # Menú superior
 menubar = Menu(root)
 filemenu = Menu(menubar, tearoff=0)
@@ -117,6 +120,11 @@ filemenu.add_command(label="Guardar como", command=guardar_como)
 filemenu.add_separator()
 filemenu.add_command(label="Salir", command=root.quit)
 menubar.add_cascade(menu=filemenu, label="Archivo")
+
+# Menú superior
+menubar.config(bg="#2d2d2d", fg="#d4d4d4")
+filemenu.config(bg="#2d2d2d", fg="#d4d4d4", activebackground="#3c3c3c", activeforeground="white")
+
 root.config(menu=menubar)
 
 # Frame para contener el área de texto y los números de línea
@@ -125,17 +133,25 @@ frame.pack(fill="both", expand=True)
 
 # Widget para los números de línea
 lineas = Text(frame, width=4, padx=4, takefocus=0, border=0,
-              background='lightgrey', state='disabled',
+               state='disabled',
               font=("Consolas", 12))
 lineas.pack(side="left", fill="y")
+# Colores para la barra de números de línea
+lineas.config(bg="#2d2d2d", fg="#d4d4d4")
 
 # Widget de texto principal
 texto = Text(frame, bd=0, padx=6, pady=4, font=("Consolas", 12), undo=True)
+
+# Colores para el área de texto principal
+texto.config(bg="#1e1e1e", fg="#d4d4d4", insertbackground="#d4d4d4")
+
+# Añadir el widget de texto al frame
 texto.pack(side="left", fill="both", expand=True)
 
 # Scrollbar para sincronizar el desplazamiento
 scrollbar = Scrollbar(frame)
 scrollbar.pack(side="right", fill="y")
+scrollbar.config(bg="#2d2d2d", troughcolor="#1e1e1e", activebackground="#555555")
 
 
 # Configurar el scrollbar y los widgets de texto
@@ -157,8 +173,10 @@ root.bind("<Control-w>", lambda e: root.quit())
 
 # Monitor inferior para mostrar mensajes al usuario
 mensaje = StringVar()
-mensaje.set("Bienvenido a tu Editor")
+mensaje.set("Editor PyC")
 monitor = Label(root, textvariable=mensaje, anchor="w")
+# Monitor inferior para mostrar mensajes al usuario
+monitor.config(bg="#1e1e1e", fg="#d4d4d4")
 monitor.pack(side="left", fill="x")
 
 # Inicializa los números de línea
