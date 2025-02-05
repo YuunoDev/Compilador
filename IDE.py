@@ -1,8 +1,52 @@
 from tkinter import *
 from tkinter import filedialog as FileDialog
+import threading
+import re
 
 
 ruta = ""  # Almacena la ruta del fichero actual
+# Almacena los colores de las palabras reservadas
+colortex = {
+    "def": "#ff7f00",  # Naranja brillante para definiciones
+    "if": "#569cd6",  # Azul cielo para condiciones
+    "else": "#569cd6",
+    "elif": "#569cd6",
+    "while": "#569cd6",
+    "for": "#569cd6",
+    "in": "#569cd6",
+    "return": "#c586c0",  # Púrpura suave para declaraciones clave
+    "print": "#9cdcfe",  # Azul claro para funciones comunes
+    "True": "#dcdcaa",  # Amarillo suave para valores booleanos
+    "False": "#dcdcaa",
+    "None": "#dcdcaa",
+    "and": "#569cd6",
+    "or": "#569cd6",
+    "not": "#569cd6",
+    "import": "#c586c0",
+    "from": "#c586c0",
+    "as": "#c586c0",
+    "break": "#c586c0",
+    "continue": "#c586c0",
+    "pass": "#c586c0",
+    "class": "#4ec9b0",  # Verde azulado para clases
+    "is": "#c586c0",
+    "lambda": "#c586c0",
+    "global": "#c586c0",
+    "nonlocal": "#c586c0",
+    "assert": "#c586c0",
+    "try": "#c586c0",
+    "except": "#c586c0",
+    "finally": "#c586c0",
+    "raise": "#c586c0",
+    "with": "#c586c0",
+    "yield": "#c586c0",
+    "del": "#c586c0",
+    "exec": "#c586c0",
+    "eval": "#c586c0",
+    "int": "#b5cea8",  # Verde suave para tipos de datos
+    "float": "#b5cea8",
+}
+
 
 def nuevo():
     global ruta
@@ -28,6 +72,7 @@ def abrir():
             texto.delete("1.0", END)
             texto.insert(INSERT, contenido)
             actualizar_numeros_linea()
+            colorTexto()
             root.title(ruta + " - Mi editor")
         except Exception as e:
             mensaje.set("Error al abrir el fichero")
@@ -101,11 +146,25 @@ def sync_scroll(*args):
     scrollbar.set(*args)
     lineas.yview("moveto", args[0])
 
-
+def colorTexto(event=None):
+    # Obtener el contenido del widget de texto
+    contenido = texto.get("1.0", END)
+    
+    for palabra, color in colortex.items():
+        # Crear un patrón de búsqueda para cada palabra reservada
+        patron = r"\b" + palabra + r"\b"
+        # Buscar todas las coincidencias de la palabra reservada
+        for match in re.finditer(patron, contenido):
+            # Obtener el índice de inicio y fin de la palabra reservada
+            start = f"1.0 + {match.start()} chars"
+            end = f"1.0 + {match.end()} chars"
+            # Colorear la palabra reservada
+            texto.tag_add(palabra, start, end)
+            texto.tag_config(palabra, foreground=color)
 
 # Configuración de la ventana principal
 root = Tk()
-root.title("Mi editor")
+root.title("IDE PyC")  # Título de la ventana   
 
 # Color de fondo de la ventana principal
 root.configure(bg="#1e1e1e")  # Fondo oscuro
@@ -159,9 +218,9 @@ scrollbar.config(command=multiple_yview)
 texto.config(yscrollcommand=sync_scroll)
 lineas.config(yscrollcommand=scrollbar.set)
 
-
 # Vincular el evento de modificación para actualizar los números de línea automáticamente
 texto.bind("<<Modified>>", on_text_change)
+texto.bind("<KeyRelease>", colorTexto)
 
 #combinaciones de teclas
 root.bind("<Control-n>", lambda e: nuevo())
@@ -169,7 +228,6 @@ root.bind("<Control-o>", lambda e: abrir())
 root.bind("<Control-s>", lambda e: guardar())
 root.bind("<Control-g>", lambda e: guardar_como())
 root.bind("<Control-w>", lambda e: root.quit())
-
 
 # Monitor inferior para mostrar mensajes al usuario
 mensaje = StringVar()
@@ -179,7 +237,10 @@ monitor = Label(root, textvariable=mensaje, anchor="w")
 monitor.config(bg="#1e1e1e", fg="#d4d4d4")
 monitor.pack(side="left", fill="x")
 
+# vincular hilo para cambiar el color del texto
+threadcolor = threading.Thread(target=colorTexto)
+
 # Inicializa los números de línea
 actualizar_numeros_linea()
 
-root.mainloop()
+root.mainloop()  # Bucle principal
