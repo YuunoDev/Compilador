@@ -2,51 +2,57 @@ from tkinter import *
 from tkinter import filedialog as FileDialog
 import threading
 import re
+from Comp import *
+from Comp_Lex import *
 
 
 ruta = ""  # Almacena la ruta del fichero actual
-# Almacena los colores de las palabras reservadas
+# Colores para los tokens
 colortex = {
-    "def": "#ff7f00",  # Naranja brillante para definiciones
-    "if": "#569cd6",  # Azul cielo para condiciones
-    "else": "#569cd6",
-    "elif": "#569cd6",
-    "while": "#569cd6",
-    "for": "#569cd6",
-    "in": "#569cd6",
-    "return": "#c586c0",  # Púrpura suave para declaraciones clave
-    "print": "#9cdcfe",  # Azul claro para funciones comunes
-    "True": "#dcdcaa",  # Amarillo suave para valores booleanos
-    "False": "#dcdcaa",
-    "None": "#dcdcaa",
-    "and": "#569cd6",
-    "or": "#569cd6",
-    "not": "#569cd6",
-    "import": "#c586c0",
-    "from": "#c586c0",
-    "as": "#c586c0",
-    "break": "#c586c0",
-    "continue": "#c586c0",
-    "pass": "#c586c0",
-    "class": "#4ec9b0",  # Verde azulado para clases
-    "is": "#c586c0",
-    "lambda": "#c586c0",
-    "global": "#c586c0",
-    "nonlocal": "#c586c0",
-    "assert": "#c586c0",
-    "try": "#c586c0",
-    "except": "#c586c0",
-    "finally": "#c586c0",
-    "raise": "#c586c0",
-    "with": "#c586c0",
-    "yield": "#c586c0",
-    "del": "#c586c0",
-    "exec": "#c586c0",
-    "eval": "#c586c0",
-    "int": "#b5cea8",  # Verde suave para tipos de datos
-    "float": "#b5cea8",
+    'ID': '#f92672',
+    'FLOAT': '#ae81ff',
+    'INT': '#ae81ff',
+    'STRING': '#e6db74',
+    'COMMENT': '#75715e',
+    'NEWLINE': '#75715e',
+    'PLUS': '#f8f8f2',
+    'MINUS': '#f8f8f2',
+    'MULT': '#f8f8f2',
+    'DIV': '#f8f8f2',
+    'MOD': '#f8f8f2',
+    'EQUALS': '#f8f8f2',
+    'DIFF': '#f8f8f2',
+    'LESS': '#f8f8f2',
+    'LESSEQ': '#f8f8f2',
+    'GREATER': '#f8f8f2',
+    'GREATERQ': '#f8f8f2',
+    'ASSIGN': '#f8f8f2',
+    'LPAREN': '#f8f8f2',
+    'RPAREN': '#f8f8f2',
+    'LBRACE': '#f8f8f2',
+    'RBRACE': '#f8f8f2',
+    'LBRACKET': '#f8f8f2',
+    'RBRACKET': '#f8f8f2',
+    'COMMA': '#f8f8f2',
+    'COLON': '#f8f8f2',
+    'TERM': '#f8f8f2',
+    'INCREMENT': '#f8f8f2',
+    'DECREMENT': '#f8f8f2',
+    'AND': '#f8f8f2',
+    'OR': '#f8f8f2',
+    'NOT': '#f8f8f2',
+    'IF': '#a6e22e',
+    'ELSE': '#a6e22e',
+    'WHILE': '#a6e22e',
+    'FOR': '#a6e22e',
+    'IN': '#a6e22e',
+    'RANGE': '#a6e22e',
+    'DEF': '#a6e22e',
+    'RETURN': '#a6e22e',
+    'TYPE': '#a6e22e',
+    'BOOL': '#a6e22e',
+    'NONE': '#a6e22e',
 }
-
 
 def nuevo():
     global ruta
@@ -146,21 +152,33 @@ def sync_scroll(*args):
     scrollbar.set(*args)
     lineas.yview("moveto", args[0])
 
+# Función para iniciar el hilo de coloreado de texto
 def colorTexto(event=None):
-    # Obtener el contenido del widget de texto
+    colorthread = threading.Thread(target=colorTextoThread)
+    colorthread.start()
+
+# Función para colorear el texto
+def colorTextoThread():
     contenido = texto.get("1.0", END)
-    
-    for palabra, color in colortex.items():
-        # Crear un patrón de búsqueda para cada palabra reservada
-        patron = r"\b" + palabra + r"\b"
-        # Buscar todas las coincidencias de la palabra reservada
-        for match in re.finditer(patron, contenido):
-            # Obtener el índice de inicio y fin de la palabra reservada
-            start = f"1.0 + {match.start()} chars"
-            end = f"1.0 + {match.end()} chars"
-            # Colorear la palabra reservada
-            texto.tag_add(palabra, start, end)
-            texto.tag_config(palabra, foreground=color)
+    tokens = lexer(contenido)
+    print(tokens)
+
+
+def ejecutar_codigo():
+    """
+    Función que simula la ejecución del código ingresado.
+    Actualmente solo imprime el contenido y hace un 'pass'.
+    """
+    contenido = texto.get("1.0", 'end-1c')  # Obtiene el contenido del editor
+    mensaje.set("Ejecutando código...")  
+    tokens = lexer(contenido)
+    #mandar a la terminal lexica
+    terminalex.delete("1.0", END)
+    for token in tokens:
+        terminalex.insert(END, f"{token}\n")
+
+    # Lógica futura: eval o exec, pero por seguridad ahora simplemente mostramos el contenido
+    pass
 
 # Configuración de la ventana principal
 root = Tk()
@@ -179,6 +197,8 @@ filemenu.add_command(label="Guardar como", command=guardar_como)
 filemenu.add_separator()
 filemenu.add_command(label="Salir", command=root.quit)
 menubar.add_cascade(menu=filemenu, label="Archivo")
+menubar.add_separator()
+menubar.add_checkbutton(label="Ejecutar", command=ejecutar_codigo)
 
 # Menú superior
 menubar.config(bg="#2d2d2d", fg="#d4d4d4")
@@ -218,6 +238,23 @@ scrollbar.config(command=multiple_yview)
 texto.config(yscrollcommand=sync_scroll)
 lineas.config(yscrollcommand=scrollbar.set)
 
+# Frame para terminales
+frame_terminal = Frame(frame, bg="#1e1e1e")
+frame_terminal.pack(fill="both", expand=True, side="right")
+
+# Terminal léxica
+label_lexica = Label(frame_terminal, text="Terminal Léxica", bg="#1e1e1e", fg="#d4d4d4")
+label_lexica.pack(fill="y", padx=5, pady=2)
+terminalex = Text(frame_terminal, height=5, bg="#1e1e1e", fg="#d4d4d4")
+terminalex.pack(fill="y", expand=True)
+
+# Terminal sintáctica
+label_sintactica = Label(frame_terminal, text="Terminal Sintáctica", bg="#1e1e1e", fg="#d4d4d4")
+label_sintactica.pack(fill="y", padx=5, pady=2)
+terminalsy = Text(frame_terminal, height=5, bg="#1e1e1e", fg="#d4d4d4")
+terminalsy.pack(fill="y", expand=True)
+
+
 # Vincular el evento de modificación para actualizar los números de línea automáticamente
 texto.bind("<<Modified>>", on_text_change)
 texto.bind("<KeyRelease>", colorTexto)
@@ -229,6 +266,10 @@ root.bind("<Control-s>", lambda e: guardar())
 root.bind("<Control-g>", lambda e: guardar_como())
 root.bind("<Control-w>", lambda e: root.quit())
 
+# Tecla rápida para ejecutar el código
+root.bind("<Control-e>", lambda e: ejecutar_codigo())
+
+
 # Monitor inferior para mostrar mensajes al usuario
 mensaje = StringVar()
 mensaje.set("Editor PyC")
@@ -236,9 +277,6 @@ monitor = Label(root, textvariable=mensaje, anchor="w")
 # Monitor inferior para mostrar mensajes al usuario
 monitor.config(bg="#1e1e1e", fg="#d4d4d4")
 monitor.pack(side="left", fill="x")
-
-# vincular hilo para cambiar el color del texto
-threadcolor = threading.Thread(target=colorTexto)
 
 # Inicializa los números de línea
 actualizar_numeros_linea()

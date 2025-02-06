@@ -1,0 +1,9 @@
+int a;
+
+a=12;
+
+int b=23;
+
+float bc=10.0;
+
+bool v=True;
