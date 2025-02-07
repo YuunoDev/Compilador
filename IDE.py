@@ -52,9 +52,15 @@ colortex = {
     'TYPE': '#a6e22e',
     'BOOL': '#a6e22e',
     'NONE': '#a6e22e',
+    'PRINT': '#a6e22e',
+    'INPUT': '#a6e22e',
+    'LEN': '#a6e22e',
+    'PLUS': '#f8f8f2',
+    'COMMENT': '#75715e'
 }
 
-def nuevo():
+# Funciones para el menú
+def nuevo():#nuevo archivo
     global ruta
     mensaje.set("Nuevo fichero")
     ruta = ""
@@ -62,7 +68,7 @@ def nuevo():
     actualizar_numeros_linea()
     root.title("Mi editor")
 
-def abrir():
+def abrir():#abrir archivo
     global ruta
     mensaje.set("Abrir fichero")
     ruta = FileDialog.askopenfilename(
@@ -116,6 +122,8 @@ def guardar_como():
         mensaje.set("Guardado cancelado")
         ruta = ""
 
+
+# Función para actualizar los números de línea
 def actualizar_numeros_linea(event=None):
     """
     Actualiza el widget 'lineas' con el número de línea correspondiente.
@@ -133,6 +141,7 @@ def actualizar_numeros_linea(event=None):
     #mover la barra de desplazamiento al mismo nivel que el texto
     multiple_yview("moveto", texto.yview()[0])
 
+# Función para el evento de cambio de texto
 def on_text_change(event):
     """
     Esta función se llama cada vez que el widget 'texto' se modifica.
@@ -155,15 +164,44 @@ def sync_scroll(*args):
 # Función para iniciar el hilo de coloreado de texto
 def colorTexto(event=None):
     colorthread = threading.Thread(target=colorTextoThread)
-    colorthread.start()
+    colorthread.run()
 
 # Función para colorear el texto
 def colorTextoThread():
+    # Obtener el contenido completo del texto
     contenido = texto.get("1.0", END)
-    tokens = lexer(contenido)
-    print(tokens)
 
+    # Obtener los tokens
+    tokens = lexer_color(contenido)
+    
+    # Eliminar cualquier formato previo
+    texto.tag_delete("ID", "1.0", END)
+    for palabra, color in colortex.items():
+        texto.tag_config(palabra, foreground=color)
 
+    # Variable para rastrear la posición en el texto
+    line_start = 1
+    col_start = 0
+
+    # Recorrer cada token para aplicar el color correspondiente
+    for token_type, token_value in tokens:
+        # Buscar la posición exacta del token en el contenido
+        search_pos = f"{line_start}.{col_start}"
+        index_start = texto.search(re.escape(token_value), search_pos, stopindex=END)
+        
+        if index_start:
+            # Calcular la posición final del token
+            index_end = f"{index_start.split('.')[0]}.{int(index_start.split('.')[1]) + len(token_value)}"
+            # Aplicar el color si el tipo de token está en colortex
+            if token_type in colortex:
+                texto.tag_add(token_type, index_start, index_end)
+            else:
+                texto.tag_add("ID", index_start, index_end)
+            
+            # Mover el cursor para la siguiente búsqueda
+            line_start, col_start = map(int, index_end.split('.'))
+
+# Función para ejecutar el código
 def ejecutar_codigo():
     """
     Función que simula la ejecución del código ingresado.
@@ -177,8 +215,20 @@ def ejecutar_codigo():
     for token in tokens:
         terminalex.insert(END, f"{token}\n")
 
-    # Lógica futura: eval o exec, pero por seguridad ahora simplemente mostramos el contenido
-    pass
+# Ventas fuera de la principal
+
+
+
+
+
+
+
+
+
+
+
+
+# Fin de ventanas fuera de la principal
 
 # Configuración de la ventana principal
 root = Tk()
