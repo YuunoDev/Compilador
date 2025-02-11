@@ -2,18 +2,18 @@ import re
 
 # Expresiones regulares para identificar tokens
 rules_color = [
-    (r'[a-zA-Z_][a-zA-Z_0-9]*', 'ID'),  # Identificadores
-    (r'\d+\.\d+', 'FLOAT'),  # Números flotantes
+    (r"[a-zA-Z_][a-zA-Z0-9_]*", 'ID'),  # Identificadores
+    (r'\d*\.\d+|\d+\.\d*', 'FLOAT'),  # Números flotantes
     (r'\d+', 'INT'),  # Números enteros
     (r'"[^"]*"', 'STRING'),  # Cadenas de texto
     (r'#.*', 'COMMENT'),  # Comentarios
-    (r'\n', 'NEWLINE'),  # Nueva línea
 ]
 
 rules_lex = [
-    (r'[a-zA-Z_][a-zA-Z_0-9]*', 'ID'),  # Identificadores
-    (r'\d+\.\d+', 'FLOAT'),  # Números flotantes
+    (r"[a-zA-Z_][a-zA-Z0-9_]*", 'ID'),  # Identificadores
+    (r'\d*\.\d+|\d+\.\d*', 'FLOAT'),  # Números flotantes
     (r'\d+', 'INT'),  # Números enteros
+    (r'\'[^\']*\'', 'STRING'),  # Cadenas de texto
     (r'"[^"]*"', 'STRING'),  # Cadenas de texto
 ]
 
@@ -42,20 +42,31 @@ reserved = {
     'def': 'DEF', 'return': 'RETURN', 'int': 'TYPE',
     'float': 'TYPE', 'str': 'TYPE', 'bool': 'TYPE',
     'True': 'BOOL', 'False': 'BOOL', 'None': 'NONE',
-    'print': 'PRINT', 'input': 'INPUT', 'len': 'LEN'
+    'print': 'PRINT', 'input': 'INPUT', 'len': 'LEN',
+    'string': 'TYPE'
 }
 
 # Lexer simple
 def lexer(input_text):
     tokens = []
     position = 0
+    #posicion de la linea
+    line = 1
+    #posicion de la columna
+    column = 0
 
     while position < len(input_text):
         match = None
 
-        # Ignorar espacios en blanco
-        if re.match(r'\s', input_text[position]):
+        # Ignorar espacios saltos de linea y tabulaciones
+        if re.match(r'\n', input_text[position]) or re.match(r'\r', input_text[position]):
             position += 1
+            line += 1 
+            column = 0
+            continue
+        elif re.match(r' ', input_text[position]):
+            position += 1
+            column += 1
             continue
 
         # saltar comentarios
@@ -64,13 +75,16 @@ def lexer(input_text):
             match = regex.match(input_text, position)
             if match:
                 position = match.end()
+                line += 1
+                column = 0
                 break
 
         # Verificar operadores
         for op, op_type in operators.items():
             if input_text.startswith(op, position):
-                tokens.append((op_type, op))
+                tokens.append((op_type, op, line, column))
                 position += len(op)
+                column += len(op)
                 match = True
                 break
 
@@ -86,8 +100,9 @@ def lexer(input_text):
                 # Verificar si es palabra reservada
                 if token_type == 'ID' and value in reserved:
                     token_type = reserved[value]
-                tokens.append((token_type, value))
+                tokens.append((token_type, value, line, column))
                 position = match.end()
+                column += len(value)
                 break
 
         if not match:

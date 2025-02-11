@@ -1,5 +1,7 @@
 from tkinter import *
 from tkinter import filedialog as FileDialog
+from tkinter import ttk
+from tkinter import colorchooser
 import threading
 import re
 from Comp import *
@@ -12,9 +14,7 @@ colortex = {
     'ID': '#f92672',
     'FLOAT': '#ae81ff',
     'INT': '#ae81ff',
-    'STRING': '#e6db74',
-    'COMMENT': '#75715e',
-    'NEWLINE': '#75715e',
+    'STRING': '#EBA500',#color naranja
     'PLUS': '#f8f8f2',
     'MINUS': '#f8f8f2',
     'MULT': '#f8f8f2',
@@ -82,9 +82,11 @@ def abrir():#abrir archivo
             with open(ruta, 'r', encoding='utf-8') as fichero:
                 contenido = fichero.read()
             texto.delete("1.0", END)
+            terminalex.delete("1.0", END)
             texto.insert(INSERT, contenido)
             actualizar_numeros_linea()
             colorTexto()
+            show_cursor_position(None)  # Mostrar la posición del cursor
             root.title(ruta + " - Mi editor")
         except Exception as e:
             mensaje.set("Error al abrir el fichero")
@@ -133,7 +135,7 @@ def actualizar_numeros_linea(event=None):
     lineas.delete("1.0", END)
     
     # Obtener el número total de líneas (sin contar la línea extra al final)
-    total_lineas = int(texto.index('end-1c').split('.')[0])
+    total_lineas = int(texto.index('end-1c').split('.')[0]);
     numeros = "\n".join(str(i) for i in range(1, total_lineas + 1))
     lineas.insert("1.0", numeros)
     lineas.config(state='disabled')
@@ -170,36 +172,49 @@ def colorTexto(event=None):
 def colorTextoThread():
     # Obtener el contenido completo del texto
     contenido = texto.get("1.0", END)
-
+    
     # Obtener los tokens
     tokens = lexer_color(contenido)
     
     # Eliminar cualquier formato previo
-    texto.tag_delete("ID", "1.0", END)
+    for tag in texto.tag_names():
+        texto.tag_remove(tag, "1.0", END)
+    
+    # Configurar los tags de colores
     for palabra, color in colortex.items():
         texto.tag_config(palabra, foreground=color)
-
-    # Variable para rastrear la posición en el texto
-    line_start = 1
-    col_start = 0
-
-    # Recorrer cada token para aplicar el color correspondiente
+    
+    # Posición actual en el texto
+    pos = "1.0"
+    
     for token_type, token_value in tokens:
-        # Buscar la posición exacta del token en el contenido
-        search_pos = f"{line_start}.{col_start}"
-        index_start = texto.search(re.escape(token_value), search_pos, stopindex=END)
-        
-        if index_start:
-            # Calcular la posición final del token
-            index_end = f"{index_start.split('.')[0]}.{int(index_start.split('.')[1]) + len(token_value)}"
-            # Aplicar el color si el tipo de token está en colortex
+        try:
+            # Buscar el token exacto
+            start_pos = texto.search(
+                re.escape(token_value),
+                pos,
+                END,
+                regexp=False  # Evitar errores por secuencias especiales
+            )
+
+            if not start_pos:
+                continue
+
+            end_pos = f"{start_pos}+{len(token_value)}c"
+
+            # Aplicar el tag correspondiente
             if token_type in colortex:
-                texto.tag_add(token_type, index_start, index_end)
+                texto.tag_add(token_type, start_pos, end_pos)
             else:
-                texto.tag_add("ID", index_start, index_end)
-            
-            # Mover el cursor para la siguiente búsqueda
-            line_start, col_start = map(int, index_end.split('.'))
+                texto.tag_add("ID", start_pos, end_pos)
+
+            pos = end_pos
+
+        except Exception as e:
+            print(f"Error al colorear token {token_type}: {token_value}", e)
+            re.purge()
+            continue
+
 
 # Función para ejecutar el código
 def ejecutar_codigo():
@@ -215,20 +230,33 @@ def ejecutar_codigo():
     for token in tokens:
         terminalex.insert(END, f"{token}\n")
 
+# Función para mostrar la posición del cursor
+def show_cursor_position(event):
+    """
+    Muestra la posición del cursor en el monitor inferior.
+    """
+    cursor_pos = texto.index(INSERT)
+    mensaje2.set(f"Línea: {cursor_pos.split('.')[0]}, Columna: {cursor_pos.split('.')[1]}")
+    colorTexto(None)
+
 # Ventas fuera de la principal
 
+def colortexto():
+    colorselec=Tk()
+    colorselec.title("Configurar color de IDE")
 
+    
+    
 
-
-
-
-
-
+    
+def selectorcl(color):
+    selectcl= colorchooser.askcolor(title="Selecciona un color")
 
 
 
 
 # Fin de ventanas fuera de la principal
+
 
 # Configuración de la ventana principal
 root = Tk()
@@ -236,19 +264,29 @@ root.title("IDE PyC")  # Título de la ventana
 
 # Color de fondo de la ventana principal
 root.configure(bg="#1e1e1e")  # Fondo oscuro
+style = ttk.Style()
+style.theme_use('alt')
+style.configure("TNotebook", background="#1e1e1e")
+style.configure("TNotebook.Tab", background="#2d2d2d", foreground="#d4d4d4", lightcolor="#2d2d2d", borderwidth=0)
+style.map("TNotebook.Tab", background=[("selected", "#1e1e1e")])
 
 # Menú superior
 menubar = Menu(root)
 filemenu = Menu(menubar, tearoff=0)
-filemenu.add_command(label="Nuevo", command=nuevo)
-filemenu.add_command(label="Abrir", command=abrir)
-filemenu.add_command(label="Guardar", command=guardar)
-filemenu.add_command(label="Guardar como", command=guardar_como)
+filemenu.add_command(label="Nuevo   Ctrl+n", command=nuevo)
+filemenu.add_command(label="Abrir   Ctrl+o", command=abrir)
+filemenu.add_command(label="Guardar Ctrl+s", command=guardar)
+filemenu.add_command(label="Guardar como Ctrl+g", command=guardar_como)
 filemenu.add_separator()
-filemenu.add_command(label="Salir", command=root.quit)
+filemenu.add_command(label="Salir   Ctrl+w", command=root.quit)
 menubar.add_cascade(menu=filemenu, label="Archivo")
 menubar.add_separator()
 menubar.add_checkbutton(label="Ejecutar", command=ejecutar_codigo)
+menubar.add_separator()
+
+Configmenu= Menu(menubar, tearoff=0)
+Configmenu.add_command(label="Color texto", command=colorTexto)
+menubar.add_cascade(menu=Configmenu, label="Configuración")
 
 # Menú superior
 menubar.config(bg="#2d2d2d", fg="#d4d4d4")
@@ -282,32 +320,35 @@ scrollbar = Scrollbar(frame)
 scrollbar.pack(side="right", fill="y")
 scrollbar.config(bg="#2d2d2d", troughcolor="#1e1e1e", activebackground="#555555")
 
-
 # Configurar el scrollbar y los widgets de texto
 scrollbar.config(command=multiple_yview)
 texto.config(yscrollcommand=sync_scroll)
 lineas.config(yscrollcommand=scrollbar.set)
 
-# Frame para terminales
-frame_terminal = Frame(frame, bg="#1e1e1e")
-frame_terminal.pack(fill="both", expand=True, side="right")
+# Contenedor de ventanas (Notebook)
+notebook = ttk.Notebook(root, style="Custom.TNotebook")
+notebook.pack(fill="both", expand=True, pady=(4, 0))
 
-# Terminal léxica
-label_lexica = Label(frame_terminal, text="Terminal Léxica", bg="#1e1e1e", fg="#d4d4d4")
-label_lexica.pack(fill="y", padx=5, pady=2)
-terminalex = Text(frame_terminal, height=5, bg="#1e1e1e", fg="#d4d4d4")
-terminalex.pack(fill="y", expand=True)
+# Terminal Léxica
+frame_terminalex = Frame(notebook, bg="#1e1e1e")
+terminalex = Text(frame_terminalex, height=5, bg="#1e1e1e", fg="#d4d4d4")
+terminalex.pack(fill="both", expand=True)
 
-# Terminal sintáctica
-label_sintactica = Label(frame_terminal, text="Terminal Sintáctica", bg="#1e1e1e", fg="#d4d4d4")
-label_sintactica.pack(fill="y", padx=5, pady=2)
+notebook.add(frame_terminalex, text="Terminal Léxica")
+
+# Terminal Sintáctica
+frame_terminal = Frame(notebook, bg="#1e1e1e")
 terminalsy = Text(frame_terminal, height=5, bg="#1e1e1e", fg="#d4d4d4")
-terminalsy.pack(fill="y", expand=True)
+terminalsy.pack(fill="both", expand=True)
+
+notebook.add(frame_terminal, text="Terminal Sintáctica")
+
+
 
 
 # Vincular el evento de modificación para actualizar los números de línea automáticamente
 texto.bind("<<Modified>>", on_text_change)
-texto.bind("<KeyRelease>", colorTexto)
+texto.bind("<KeyRelease>", show_cursor_position)
 
 #combinaciones de teclas
 root.bind("<Control-n>", lambda e: nuevo())
@@ -319,14 +360,19 @@ root.bind("<Control-w>", lambda e: root.quit())
 # Tecla rápida para ejecutar el código
 root.bind("<Control-e>", lambda e: ejecutar_codigo())
 
+# Barra de estado
+status_frame = Frame(root, bg="#2d2d2d", height=25)
+status_frame.pack(fill="x", side="bottom")
 
-# Monitor inferior para mostrar mensajes al usuario
-mensaje = StringVar()
-mensaje.set("Editor PyC")
-monitor = Label(root, textvariable=mensaje, anchor="w")
-# Monitor inferior para mostrar mensajes al usuario
-monitor.config(bg="#1e1e1e", fg="#d4d4d4")
-monitor.pack(side="left", fill="x")
+# Mensaje de estado
+mensaje = StringVar(value="Ready")
+status_left = Label(status_frame, textvariable=mensaje, bg="#2d2d2d", fg="#d4d4d4", padx=5, pady=2)
+status_left.pack(side="left")
+
+# Posición del cursor
+mensaje2 = StringVar(value="Ln 1, Col 0")
+status_right = Label(status_frame, textvariable=mensaje2, bg="#2d2d2d", fg="#d4d4d4", padx=5, pady=2)
+status_right.pack(side="right")
 
 # Inicializa los números de línea
 actualizar_numeros_linea()
