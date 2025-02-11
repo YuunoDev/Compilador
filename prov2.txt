@@ -12,4 +12,4 @@ print("a");
 
 print("asdasd");
 
-#aaaaa
+print(1+3);

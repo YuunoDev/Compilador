@@ -6,58 +6,82 @@ import threading
 import re
 from Comp import *
 from Comp_Lex import *
-
+import json
+import os
 
 ruta = ""  # Almacena la ruta del fichero actual
 # Colores para los tokens
-colortex = {
-    'ID': '#f92672',
-    'FLOAT': '#ae81ff',
-    'INT': '#ae81ff',
-    'STRING': '#EBA500',#color naranja
-    'PLUS': '#f8f8f2',
-    'MINUS': '#f8f8f2',
-    'MULT': '#f8f8f2',
-    'DIV': '#f8f8f2',
-    'MOD': '#f8f8f2',
-    'EQUALS': '#f8f8f2',
-    'DIFF': '#f8f8f2',
-    'LESS': '#f8f8f2',
-    'LESSEQ': '#f8f8f2',
-    'GREATER': '#f8f8f2',
-    'GREATERQ': '#f8f8f2',
-    'ASSIGN': '#f8f8f2',
-    'LPAREN': '#f8f8f2',
-    'RPAREN': '#f8f8f2',
-    'LBRACE': '#f8f8f2',
-    'RBRACE': '#f8f8f2',
-    'LBRACKET': '#f8f8f2',
-    'RBRACKET': '#f8f8f2',
-    'COMMA': '#f8f8f2',
-    'COLON': '#f8f8f2',
-    'TERM': '#f8f8f2',
-    'INCREMENT': '#f8f8f2',
-    'DECREMENT': '#f8f8f2',
-    'AND': '#f8f8f2',
-    'OR': '#f8f8f2',
-    'NOT': '#f8f8f2',
-    'IF': '#a6e22e',
-    'ELSE': '#a6e22e',
-    'WHILE': '#a6e22e',
-    'FOR': '#a6e22e',
-    'IN': '#a6e22e',
-    'RANGE': '#a6e22e',
-    'DEF': '#a6e22e',
-    'RETURN': '#a6e22e',
-    'TYPE': '#a6e22e',
-    'BOOL': '#a6e22e',
-    'NONE': '#a6e22e',
-    'PRINT': '#a6e22e',
-    'INPUT': '#a6e22e',
-    'LEN': '#a6e22e',
-    'PLUS': '#f8f8f2',
-    'COMMENT': '#75715e'
-}
+arch_colors = "colores.json"
+
+# Cargar colores del archivo si existe
+def cargar_colores():
+    if os.path.exists(arch_colors):
+        with open(arch_colors, "r") as archivo:
+            return json.load(archivo)
+    # Si no existe, usa colores predeterminados
+    else:
+        tepcolors = {
+            'ID': '#f92672',
+            'FLOAT': '#ae81ff',
+            'INT': '#ae81ff',
+            'STRING': '#EBA500',#color naranja
+            'PLUS': '#f8f8f2',
+            'MINUS': '#f8f8f2',
+            'MULT': '#f8f8f2',
+            'DIV': '#f8f8f2',
+            'MOD': '#f8f8f2',
+            'EQUALS': '#f8f8f2',
+            'DIFF': '#f8f8f2',
+            'LESS': '#f8f8f2',
+            'LESSEQ': '#f8f8f2',
+            'GREATER': '#f8f8f2',
+            'GREATERQ': '#f8f8f2',
+            'ASSIGN': '#f8f8f2',
+            'LPAREN': '#f8f8f2',
+            'RPAREN': '#f8f8f2',
+            'LBRACE': '#f8f8f2',
+            'RBRACE': '#f8f8f2',
+            'LBRACKET': '#f8f8f2',
+            'RBRACKET': '#f8f8f2',
+            'COMMA': '#f8f8f2',
+            'COLON': '#f8f8f2',
+            'TERM': '#f8f8f2',
+            'INCREMENT': '#f8f8f2',
+            'DECREMENT': '#f8f8f2',
+            'AND': '#f8f8f2',
+            'OR': '#f8f8f2',
+            'NOT': '#f8f8f2',
+            'IF': '#a6e22e',
+            'ELSE': '#a6e22e',
+            'WHILE': '#a6e22e',
+            'FOR': '#a6e22e',
+            'IN': '#a6e22e',
+            'RANGE': '#a6e22e',
+            'DEF': '#a6e22e',
+            'RETURN': '#a6e22e',
+            'TYPE': '#a6e22e',
+            'BOOL': '#a6e22e',
+            'NONE': '#a6e22e',
+            'PRINT': '#a6e22e',
+            'INPUT': '#a6e22e',
+            'LEN': '#a6e22e',
+            'PLUS': '#f8f8f2',
+            'COMMENT': '#75715e'
+        }
+        with open(arch_colors, "w") as archivo:
+            json.dump(tepcolors, archivo, indent=4)
+        return tepcolors 
+    
+# Cargar colores iniciales
+colortex = cargar_colores()
+
+def guardar_colores():
+    with open(arch_colors, "w") as archivo:
+        json.dump(colortex, archivo, indent=4)
+
+# Función para cambiar el color de un token
+    
+
 
 # Funciones para el menú
 def nuevo():#nuevo archivo
@@ -188,33 +212,39 @@ def colorTextoThread():
     pos = "1.0"
     
     for token_type, token_value in tokens:
+        # Encontrar la siguiente ocurrencia del token
         try:
+            
             # Buscar el token exacto
             start_pos = texto.search(
                 re.escape(token_value),
                 pos,
                 END,
-                regexp=False  # Evitar errores por secuencias especiales
+                regexp=True # No usar expresiones regulares
             )
 
+            
             if not start_pos:
                 continue
-
+                
+            # Calcular la posición final
             end_pos = f"{start_pos}+{len(token_value)}c"
-
+            
             # Aplicar el tag correspondiente
             if token_type in colortex:
-                texto.tag_add(token_type, start_pos, end_pos)
+                texto.tag_add(token_type, start_pos, end_pos)                
             else:
                 texto.tag_add("ID", start_pos, end_pos)
-
+            
+            # Actualizar la posición para la siguiente búsqueda
             pos = end_pos
 
+            
         except Exception as e:
             print(f"Error al colorear token {token_type}: {token_value}", e)
             re.purge()
             continue
-
+    re.purge()
 
 # Función para ejecutar el código
 def ejecutar_codigo():
@@ -240,16 +270,195 @@ def show_cursor_position(event):
     colorTexto(None)
 
 # Ventas fuera de la principal
-
 def colortexto():
-    colorselec=Tk()
-    colorselec.title("Configurar color de IDE")
+    # Crear y configurar la ventana principal
+    colorselec = Tk()
+    colorselec.title("Personalización de Colores IDE")
+    colorselec.configure(bg="#1e1e1e")
+    
+    # Agregar un poco de padding general
+    colorselec.geometry("900x700")
+    colorselec.resizable(False, False)
+    
+    # Marco principal con efecto de sombra
+    marco_principal = Frame(
+        colorselec,
+        bg="#1e1e1e",
+        highlightbackground="#333333",
+        highlightthickness=1
+    )
+    marco_principal.pack(padx=20, pady=20, fill=BOTH, expand=True)
+    
+    # Título decorativo
+    Label(
+        marco_principal,
+        text="Vista Previa del Código",
+        font=("Arial", 12, "bold"),
+        bg="#1e1e1e",
+        fg="#ffffff"
+    ).grid(row=0, column=0, pady=10, padx=10, sticky="w")
+    
+    # Área de texto mejorada
+    texto_muestra = Text(
+        marco_principal,
+        height=12,
+        width=50,
+        bg="#1e1e1e",
+        fg="white",
+        font=("Consolas", 12),
+        padx=15,
+        pady=15,
+        wrap=WORD,
+        insertbackground="white"  # Cursor blanco
+    )
+    texto_muestra.grid(row=1, column=0, padx=10, pady=5, sticky="nsew")
+    
+    # Texto de ejemplo más elaborado
+    codigo_ejemplo = '''def ejemplo_funcion():
+    # Este es un comentario de ejemplo
+    mensaje = "¡Hola, mundo!"
+    print(mensaje)
+    
+    # Prueba los colores aquí
+    for i in range(3):
+        print(f"Contador: {i}")'''
+    
+    texto_muestra.insert(INSERT, codigo_ejemplo)
+    
+    # Marco para selección de colores con título
+    Label(
+        marco_principal,
+        text="Selección de Colores",
+        font=("Arial", 12, "bold"),
+        bg="#1e1e1e",
+        fg="#ffffff"
+    ).grid(row=0, column=2, pady=10, padx=10, sticky="w")
+    
+    # Contenedor con scroll para los colores
+    contenedor_scroll = Frame(marco_principal)
+    contenedor_scroll.grid(row=1, column=2, padx=20, pady=5, sticky="nsew")
+    
+    canvas = Canvas(contenedor_scroll, bg="#1e1e1e", highlightthickness=0)
+    scrollbar = Scrollbar(contenedor_scroll, orient=VERTICAL, command=canvas.yview)
+    marco_derecho = Frame(canvas, bg="#1e1e1e")
+    
+    marco_derecho.bind(
+        "<Configure>",
+        lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+    )
+    
+    canvas.create_window((0, 0), window=marco_derecho, anchor="nw")
+    canvas.configure(yscrollcommand=scrollbar.set)
+    
+    canvas.pack(side=LEFT, fill=BOTH, expand=True)
+    scrollbar.pack(side=RIGHT, fill=Y)
+    
+    # Función para crear filas de colores más estilizadas
+    def crear_fila_color(parent, texto, color):
+        frame = Frame(parent, bg="#1e1e1e", pady=5)
+        frame.pack(fill=X)
+        
+        Label(
+            frame,
+            text=texto,
+            width=15,
+            anchor="w",
+            bg="#1e1e1e",
+            fg="white",
+            font=("Arial", 10)
+        ).pack(side=LEFT)
+        
+        muestra_color = Label(
+            frame,
+            bg=color,
+            width=8,
+            height=1,
+            relief="raised"
+        )
+        muestra_color.pack(side=LEFT, padx=10)
+        
+        Button(
+            frame,
+            text="Cambiar",
+            relief="raised",
+            bg="#333333",
+            fg="white",
+            activebackground="#444444",
+            activeforeground="white",
+            cursor="hand2"
+        ).pack(side=LEFT, padx=5)
+    
+
+    # Crear filas de colores
+    for nombre, color in colortex.items():
+        crear_fila_color(marco_derecho, nombre, color)
+
+    # Hacer que el área de texto sea expandible
+    marco_principal.grid_columnconfigure(0, weight=1)
+    marco_principal.grid_rowconfigure(1, weight=1)
+
+    #poner color en el texto
+    colorcambsel(texto_muestra)
+    
+    # Iniciar la ventana
+    colorselec.mainloop()
+
+# Función para colorear el texto de cambio de color
+def colorcambsel(intput_text):
+    # Obtener el contenido completo del texto
+    contenido = intput_text.get("1.0", END)
+    
+    # Obtener los tokens
+    tokens = lexer_color(contenido)
+    
+    # Eliminar cualquier formato previo
+    for tag in intput_text.tag_names():
+        intput_text.tag_remove(tag, "1.0", END)
+    
+    # Configurar los tags de colores
+    for palabra, color in colortex.items():
+        intput_text.tag_config(palabra, foreground=color)
+    
+    # Posición actual en el texto
+    pos = "1.0"
+    
+    for token_type, token_value in tokens:
+        # Encontrar la siguiente ocurrencia del token
+        try:
+            
+            # Buscar el token exacto
+            start_pos = intput_text.search(
+                re.escape(token_value),
+                pos,
+                END,
+                regexp=True # No usar expresiones regulares
+            )
+
+            
+            if not start_pos:
+                continue
+                
+            # Calcular la posición final
+            end_pos = f"{start_pos}+{len(token_value)}c"
+            
+            # Aplicar el tag correspondiente
+            if token_type in colortex:
+                intput_text.tag_add(token_type, start_pos, end_pos)                
+            else:
+                intput_text.tag_add("ID", start_pos, end_pos)
+            
+            # Actualizar la posición para la siguiente búsqueda
+            pos = end_pos
+
+            
+        except Exception as e:
+            print(f"Error al colorear token {token_type}: {token_value}", e)
+            re.purge()
+            continue
+    re.purge()
 
     
-    
-
-    
-def selectorcl(color):
+def cambiar_color(id_label, color_label):
     selectcl= colorchooser.askcolor(title="Selecciona un color")
 
 
@@ -285,13 +494,13 @@ menubar.add_checkbutton(label="Ejecutar", command=ejecutar_codigo)
 menubar.add_separator()
 
 Configmenu= Menu(menubar, tearoff=0)
-Configmenu.add_command(label="Color texto", command=colorTexto)
+Configmenu.add_command(label="Color texto", command=colortexto)
 menubar.add_cascade(menu=Configmenu, label="Configuración")
 
 # Menú superior
 menubar.config(bg="#2d2d2d", fg="#d4d4d4")
-filemenu.config(bg="#2d2d2d", fg="#d4d4d4", activebackground="#3c3c3c", activeforeground="white")
-
+filemenu.config(bg="#2d2d2d", fg="#d4d4d4", activebackground="#3c3c3c", activeforeground="#d4d4d4")
+Configmenu.config(bg="#2d2d2d", fg="#d4d4d4", activebackground="#3c3c3c", activeforeground="#d4d4d4")
 root.config(menu=menubar)
 
 # Frame para contener el área de texto y los números de línea
@@ -342,8 +551,6 @@ terminalsy = Text(frame_terminal, height=5, bg="#1e1e1e", fg="#d4d4d4")
 terminalsy.pack(fill="both", expand=True)
 
 notebook.add(frame_terminal, text="Terminal Sintáctica")
-
-
 
 
 # Vincular el evento de modificación para actualizar los números de línea automáticamente
