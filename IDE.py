@@ -4,14 +4,63 @@ from tkinter import ttk
 from tkinter import colorchooser
 import threading
 import re
+from tkinter import messagebox
 from Comp import *
 from Comp_Lex import *
 import json
 import os
 
-ruta = ""  # Almacena la ruta del fichero actual
+
+ruta = ""
 # Colores para los tokens
 arch_colors = "colores.json"
+edit=False  # Bandera para saber si se ha editado el texto
+
+# lista de colores que quedara como uno en comun
+colores_comunes_punt = {
+    'PLUS',
+    'MINUS',
+    'MULT',
+    'DIV',
+    'MOD',
+    'EQUALS',
+    'DIFF',
+    'LESS',
+    'LESSEQ',
+    'GREATER',
+    'GREATERQ',
+    'ASSIGN',
+    'LPAREN',
+    'RPAREN',
+    'LBRACE',
+    'RBRACE',
+    'LBRACKET',
+    'RBRACKET',
+    'COMMA',
+    'COLON',
+    'TERM',
+    'INCREMENT',
+    'DECREMENT',
+    'AND',
+    'OR',
+    'NOT'
+}
+
+colores_comunes_reserv = {
+    'IF',
+    'ELSE',
+    'WHILE',
+    'FOR',
+    'IN',
+    'RANGE',
+    'DEF',
+    'TYPE',
+    'BOOL',
+    'NONE',
+    'PRINT',
+    'INPUT',
+}        
+
 
 # Cargar colores del archivo si existe
 def cargar_colores():
@@ -58,14 +107,13 @@ def cargar_colores():
             'IN': '#a6e22e',
             'RANGE': '#a6e22e',
             'DEF': '#a6e22e',
-            'RETURN': '#a6e22e',
             'TYPE': '#a6e22e',
             'BOOL': '#a6e22e',
             'NONE': '#a6e22e',
             'PRINT': '#a6e22e',
             'INPUT': '#a6e22e',
-            'LEN': '#a6e22e',
-            'PLUS': '#f8f8f2',
+            'RETURN': "#f92694",
+            'LEN': '#f21231',
             'COMMENT': '#75715e'
         }
         with open(arch_colors, "w") as archivo:
@@ -84,69 +132,103 @@ def guardar_colores():
 
 
 # Funciones para el menú
-def nuevo():#nuevo archivo
-    global ruta
+def nuevo():
+    """Crea un nuevo archivo."""
+    global ruta, edit
     mensaje.set("Nuevo fichero")
     ruta = ""
     texto.delete("1.0", END)
     actualizar_numeros_linea()
     root.title("Mi editor")
+    edit = False
 
-def abrir():#abrir archivo
+def abrir():
+    """Función para abrir un archivo sin trabar la interfaz gráfica."""
+    mensaje.set("Abriendo fichero...")
+    opent = threading.Thread(target=open_thread, daemon=True)  # Hilo en segundo plano
+    opent.start()  # Iniciar el hilo correctamente
+
+def open_thread():
+    """Maneja la apertura del archivo en un hilo secundario."""
     global ruta
-    mensaje.set("Abrir fichero")
-    ruta = FileDialog.askopenfilename(
-        initialdir='.',
-        filetypes=(("Ficheros de texto", "*.txt"),),
+    ruta_temp = FileDialog.askopenfilename(
+        initialdir=".",
+        filetypes=[("Ficheros de texto", "*.txt")],
         title="Abrir un fichero de texto"
     )
 
-    if ruta != "":
-        try:
-            with open(ruta, 'r', encoding='utf-8') as fichero:
-                contenido = fichero.read()
-            texto.delete("1.0", END)
-            terminalex.delete("1.0", END)
-            texto.insert(INSERT, contenido)
-            actualizar_numeros_linea()
-            colorTexto()
-            show_cursor_position(None)  # Mostrar la posición del cursor
-            root.title(ruta + " - Mi editor")
-        except Exception as e:
-            mensaje.set("Error al abrir el fichero")
-            print("Error:", e)
+    if ruta_temp:
+        ruta = ruta_temp
+        leer_archivo(ruta)
+
+def leer_archivo(ruta):
+    "Lee el contenido de un archivo y lo muestra en la interfaz."""
+    try:
+        with open(ruta, "r", encoding="utf-8", errors="ignore") as fichero:
+            contenido = fichero.read()
+
+        texto.delete("1.0",END)
+        texto.insert(INSERT, contenido)
+
+        actualizar_numeros_linea()
+        show_cursor_position(None)  # Mostrar posición del cursor
+        root.title(f"{ruta} - Mi editor")
+        mensaje.set("Archivo cargado correctamente")
+        global edit
+        edit = False
+
+    except Exception as e:
+        mensaje.set("Error al abrir el fichero")
+        messagebox.showerror("Error", f"No se pudo abrir el archivo:\n{e}")
 
 def guardar():
-    mensaje.set("Guardar fichero")
-    if ruta != "":
-        contenido = texto.get("1.0", 'end-1c')
+    """Guarda el archivo en la ruta actual o pide guardarlo si no tiene ruta."""
+    global edit
+    if ruta:
+        contenido = texto.get("1.0", "end-1c")
         try:
-            with open(ruta, 'w+', encoding='utf-8') as fichero:
+            with open(ruta, "w", encoding="utf-8") as fichero:
                 fichero.write(contenido)
             mensaje.set("Fichero guardado correctamente")
+            edit = False
         except Exception as e:
             mensaje.set("Error al guardar el fichero")
-            print("Error:", e)
+            messagebox.showerror("Error", f"No se pudo guardar el archivo:\n{e}")
     else:
         guardar_como()
 
 def guardar_como():
-    global ruta
+    """Guarda el archivo con un nuevo nombre."""
+    global ruta, edit
     mensaje.set("Guardar fichero como")
-    fichero = FileDialog.asksaveasfile(title="Guardar fichero", mode="w", defaultextension=".txt")
-    if fichero is not None:
-        ruta = fichero.name
-        contenido = texto.get("1.0", 'end-1c')
+    ruta_temp = FileDialog.asksaveasfilename(
+        title="Guardar fichero",
+        defaultextension=".txt",
+        filetypes=[("Ficheros de texto", "*.txt")]
+    )
+
+    if ruta_temp:
+        ruta = ruta_temp
+        contenido = texto.get("1.0", "end-1c")
         try:
-            with open(ruta, 'w+', encoding='utf-8') as f:
+            with open(ruta, "w", encoding="utf-8") as f:
                 f.write(contenido)
             mensaje.set("Fichero guardado correctamente")
+            edit = False
         except Exception as e:
             mensaje.set("Error al guardar el fichero")
-            print("Error:", e)
+            messagebox.showerror("Error", f"No se pudo guardar el archivo:\n{e}")
     else:
         mensaje.set("Guardado cancelado")
-        ruta = ""
+
+
+def exit():
+    """Cierra la aplicación, preguntando si se deben guardar cambios."""
+    global edit
+    if edit:
+        if messagebox.askyesno("Salir", "¿Desea guardar los cambios antes de salir?"):
+            guardar()
+    root.quit()
 
 
 # Función para actualizar los números de línea
@@ -174,8 +256,10 @@ def on_text_change(event):
     Se actualizan los números de línea y se restablece la bandera 'modified'.
     """
     actualizar_numeros_linea()
+    global edit
+    edit=True
+    #colorTexto(None)
     texto.edit_modified(False)  # Restablecer la bandera de modificación
-    
 
 # Función para sincronizar el desplazamiento
 def multiple_yview(*args):
@@ -190,7 +274,7 @@ def sync_scroll(*args):
 # Función para iniciar el hilo de coloreado de texto
 def colorTexto(event=None):
     colorthread = threading.Thread(target=colorTextoThread)
-    colorthread.run()
+    colorthread.start()
 
 # Función para colorear el texto
 def colorTextoThread():
@@ -211,7 +295,7 @@ def colorTextoThread():
     # Posición actual en el texto
     pos = "1.0"
     
-    for token_type, token_value in tokens:
+    for token_type, token_value, token_ID in tokens:
         # Encontrar la siguiente ocurrencia del token
         try:
             
@@ -220,9 +304,8 @@ def colorTextoThread():
                 re.escape(token_value),
                 pos,
                 END,
-                regexp=True # No usar expresiones regulares
+                regexp=True
             )
-
             
             if not start_pos:
                 continue
@@ -249,25 +332,46 @@ def colorTextoThread():
 # Función para ejecutar el código
 def ejecutar_codigo():
     """
+    Función que ejecuta el código ingresado.
+    """
+    ejecutar = threading.Thread(target=thread_ejecutar)
+    ejecutar.start()
+
+def thread_ejecutar():
+    """
     Función que simula la ejecución del código ingresado.
-    Actualmente solo imprime el contenido y hace un 'pass'.
     """
     contenido = texto.get("1.0", 'end-1c')  # Obtiene el contenido del editor
     mensaje.set("Ejecutando código...")  
-    tokens = lexer(contenido)
+    tokens, errors = lexer(contenido)
     #mandar a la terminal lexica
+    terminalex.config(state="normal")  # Habilitar la edición
     terminalex.delete("1.0", END)
+
+    terminalerlex.config(state="normal")  # Habilitar la edición
+    terminalerlex.delete("1.0", END)
+    #abrir terminal
     for token in tokens:
         terminalex.insert(END, f"{token}\n")
+
+    for error in errors:
+        #print(f"Línea {error[0]}, Columna {error[1]}: {error[2]}")
+        terminalerlex.insert(END, f"Línea {error[0]}, Columna {error[1]}: {error[2]}\n")
+
+    terminalex.config(state="disabled")  # Deshabilitar la edición
+    terminalerlex.config(state="disabled")  # Deshabilitar la edición
 
 # Función para mostrar la posición del cursor
 def show_cursor_position(event):
     """
     Muestra la posición del cursor en el monitor inferior.
     """
+    treadsh=threading.Thread(target=tread_showcursor)
+    treadsh.start()
+
+def tread_showcursor():
     cursor_pos = texto.index(INSERT)
     mensaje2.set(f"Línea: {cursor_pos.split('.')[0]}, Columna: {cursor_pos.split('.')[1]}")
-    colorTexto(None)
 
 # Ventas fuera de la principal
 def colortexto():
@@ -277,7 +381,7 @@ def colortexto():
     colorselec.configure(bg="#1e1e1e")
     
     # Agregar un poco de padding general
-    colorselec.geometry("900x700")
+    colorselec.geometry("900x500")
     colorselec.resizable(False, False)
     
     # Marco principal con efecto de sombra
@@ -354,10 +458,11 @@ def colortexto():
     scrollbar.pack(side=RIGHT, fill=Y)
     
     # Función para crear filas de colores más estilizadas
-    def crear_fila_color(parent, texto, color):
+    def crear_fila_color(parent, texto, color, textocop):
         frame = Frame(parent, bg="#1e1e1e", pady=5)
         frame.pack(fill=X)
-        
+
+        # Etiqueta con el nombre del color
         Label(
             frame,
             text=texto,
@@ -368,6 +473,7 @@ def colortexto():
             font=("Arial", 10)
         ).pack(side=LEFT)
         
+        # Muestra del color actual
         muestra_color = Label(
             frame,
             bg=color,
@@ -377,21 +483,58 @@ def colortexto():
         )
         muestra_color.pack(side=LEFT, padx=10)
         
-        Button(
+        # Botón para cambiar el color
+        btn= Button(
             frame,
             text="Cambiar",
-            relief="raised",
+            command=lambda: cambiar_color(texto, muestra_color),
             bg="#333333",
             fg="white",
-            activebackground="#444444",
-            activeforeground="white",
-            cursor="hand2"
-        ).pack(side=LEFT, padx=5)
+            relief="raised"
+        )
+        btn.pack(side=LEFT, padx=10)
     
+    # Función para cambiar el color de un token
+    def cambiar_color(id_label, color_label):
+        colorsec = colorchooser.askcolor(title=f"Selecciona un color para {id_label}", parent=colorselec)
+        if colorsec[1]:  # color[1] contiene el valor hexadecimal del color
+            color_label.config(bg=colorsec[1])
+            if id_label=="Operadores":
+                print("Operadores")
+                for nombre, color in colortex.items():
+                    if nombre in colores_comunes_punt:
+                        colortex[nombre] = colorsec[1]
+            elif id_label=="Palabras Reservadas":
+                for nombre, color in colortex.items():
+                    if nombre in colores_comunes_reserv:
+                        colortex[nombre] = colorsec[1]
+            else:
+                colortex[id_label] = colorsec[1]
+            guardar_colores()
+            colorcambsel(texto_muestra)
+
+    # si se encontro un color comun
+    ccp=False
+    ccr=False
 
     # Crear filas de colores
     for nombre, color in colortex.items():
-        crear_fila_color(marco_derecho, nombre, color)
+        #si es difernete a los colores comunes agregarlo
+        if nombre not in colores_comunes_punt and nombre not in colores_comunes_reserv:
+            crear_fila_color(marco_derecho, nombre, color, texto_muestra)
+        #si es igual a los colores comunes agregarlo
+        elif nombre in colores_comunes_punt:
+            if not ccp:
+                crear_fila_color(marco_derecho, "Operadores", color,texto_muestra)
+                ccp=True
+        elif nombre in colores_comunes_reserv:
+            if not ccr:
+                crear_fila_color(marco_derecho, "Palabras Reservadas", color,texto_muestra)
+                ccr=True
+        else:
+            print("Error al agregar el color", nombre)
+                
+        
 
     # Hacer que el área de texto sea expandible
     marco_principal.grid_columnconfigure(0, weight=1)
@@ -403,8 +546,9 @@ def colortexto():
     # Iniciar la ventana
     colorselec.mainloop()
 
-# Función para colorear el texto de cambio de color
+    # Función para colorear el texto de cambio de color
 def colorcambsel(intput_text):
+
     # Obtener el contenido completo del texto
     contenido = intput_text.get("1.0", END)
     
@@ -456,20 +600,14 @@ def colorcambsel(intput_text):
             re.purge()
             continue
     re.purge()
-
-    
-def cambiar_color(id_label, color_label):
-    selectcl= colorchooser.askcolor(title="Selecciona un color")
-
-
-
-
-# Fin de ventanas fuera de la principal
+##### Fin de ventanas fuera de la principal
 
 
 # Configuración de la ventana principal
 root = Tk()
 root.title("IDE PyC")  # Título de la ventana   
+#abrir ventana completa
+root.state('zoomed')
 
 # Color de fondo de la ventana principal
 root.configure(bg="#1e1e1e")  # Fondo oscuro
@@ -503,6 +641,7 @@ filemenu.config(bg="#2d2d2d", fg="#d4d4d4", activebackground="#3c3c3c", activefo
 Configmenu.config(bg="#2d2d2d", fg="#d4d4d4", activebackground="#3c3c3c", activeforeground="#d4d4d4")
 root.config(menu=menubar)
 
+
 # Frame para contener el área de texto y los números de línea
 frame = Frame(root)
 frame.pack(fill="both", expand=True)
@@ -516,7 +655,7 @@ lineas.pack(side="left", fill="y")
 lineas.config(bg="#2d2d2d", fg="#d4d4d4")
 
 # Widget de texto principal
-texto = Text(frame, bd=0, padx=6, pady=4, font=("Consolas", 12), undo=True)
+texto = Text(frame, bd=0, padx=6, pady=4, font=("Consolas", 12), undo=True,  wrap="none")
 
 # Colores para el área de texto principal
 texto.config(bg="#1e1e1e", fg="#d4d4d4", insertbackground="#d4d4d4")
@@ -534,24 +673,73 @@ scrollbar.config(command=multiple_yview)
 texto.config(yscrollcommand=sync_scroll)
 lineas.config(yscrollcommand=scrollbar.set)
 
+# Frame para terminales
+frame_terminal = Frame(frame, bg="#1e1e1e")
+frame_terminal.pack(fill="both", expand=True, side="right")
+
+#Pestañas para la terminal
+notebook_terminal = ttk.Notebook(frame_terminal, style="Custom.TNotebook")
+notebook_terminal.pack(fill="both", expand=True)
+
+# Terminal léxica
+framelexer = Frame(notebook_terminal, bg="#1e1e1e") # Fondo oscuro
+terminalex = Text(framelexer, height=5, bg="#1e1e1e", fg="#d4d4d4")
+terminalex.pack(fill="both", expand=True)
+terminalex.config(state="disabled")
+
+notebook_terminal.add(framelexer, text="Terminal Léxica")
+
+# Terminal sintáctica
+frame_terminalsy = Frame(notebook_terminal, bg="#1e1e1e")
+terminalsy = Text(frame_terminalsy, height=5, bg="#1e1e1e", fg="#d4d4d4")
+terminalsy.pack(fill="both", expand=True)
+terminalsy.config(state="disabled")
+
+notebook_terminal.add(frame_terminalsy, text="Terminal Sintáctica")
+
+# Terminal semántica
+frame_terminalse = Frame(notebook_terminal, bg="#1e1e1e")
+terminalse = Text(frame_terminalse, height=5, bg="#1e1e1e", fg="#d4d4d4")
+terminalse.pack(fill="both", expand=True)
+terminalse.config(state="disabled")
+
+notebook_terminal.add(frame_terminalse, text="Terminal Semántica")
+
+
 # Contenedor de ventanas (Notebook)
 notebook = ttk.Notebook(root, style="Custom.TNotebook")
 notebook.pack(fill="both", expand=True, pady=(4, 0))
 
-# Terminal Léxica
+# Terminal de Ejecución
 frame_terminalex = Frame(notebook, bg="#1e1e1e")
-terminalex = Text(frame_terminalex, height=5, bg="#1e1e1e", fg="#d4d4d4")
-terminalex.pack(fill="both", expand=True)
+terminalej = Text(frame_terminalex, height=5, bg="#1e1e1e", fg="#d4d4d4")
+terminalej.pack(fill="both", expand=True)
 
-notebook.add(frame_terminalex, text="Terminal Léxica")
+notebook.add(frame_terminalex, text="Terminal de Ejecución")
 
-# Terminal Sintáctica
-frame_terminal = Frame(notebook, bg="#1e1e1e")
-terminalsy = Text(frame_terminal, height=5, bg="#1e1e1e", fg="#d4d4d4")
-terminalsy.pack(fill="both", expand=True)
+# Terminal de Errores lexicos
+frame_terminalerlex = Frame(notebook, bg="#1e1e1e")
+terminalerlex = Text(frame_terminalerlex, height=5, bg="#1e1e1e", fg="#d4d4d4")
+terminalerlex.pack(fill="both", expand=True)
+terminalerlex.config(state="disabled")
 
-notebook.add(frame_terminal, text="Terminal Sintáctica")
+notebook.add(frame_terminalerlex, text="Errores Léxicos")
 
+# Terminal de Errores sintácticos
+frame_terminalsin = Frame(notebook, bg="#1e1e1e")
+terminalsin = Text(frame_terminalsin, height=5, bg="#1e1e1e", fg="#d4d4d4")
+terminalsin.pack(fill="both", expand=True)
+terminalsin.config(state="disabled")
+
+notebook.add(frame_terminalsin, text="Errores Sintácticos")
+
+# Terminal de Errores Semánticos
+frame_terminalsem = Frame(notebook, bg="#1e1e1e")
+terminalsem= Text(frame_terminalsem,height=5, bg="#1e1e1e", fg="#d4d4d4")
+terminalsem.pack(fill="both",expand=TRUE)
+terminalsem.config(state="disabled")
+
+notebook.add(frame_terminalsem, text="Errores Semáticos")
 
 # Vincular el evento de modificación para actualizar los números de línea automáticamente
 texto.bind("<<Modified>>", on_text_change)
@@ -562,7 +750,7 @@ root.bind("<Control-n>", lambda e: nuevo())
 root.bind("<Control-o>", lambda e: abrir())
 root.bind("<Control-s>", lambda e: guardar())
 root.bind("<Control-g>", lambda e: guardar_como())
-root.bind("<Control-w>", lambda e: root.quit())
+root.bind("<Control-w>", lambda e: exit())
 
 # Tecla rápida para ejecutar el código
 root.bind("<Control-e>", lambda e: ejecutar_codigo())
@@ -584,4 +772,4 @@ status_right.pack(side="right")
 # Inicializa los números de línea
 actualizar_numeros_linea()
 
-root.mainloop()  # Bucle principal
+tread_main=threading.Thread(target=root.mainloop())  # Bucle principal
