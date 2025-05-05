@@ -6,141 +6,42 @@ import threading
 import re
 from tkinter import messagebox
 from Comp import *
-from Comp_Lex import *
+from Lex.Anlex import *
 import json
 import os
 
 
 ruta = ""
 # Colores para los tokens
-arch_colors = "colores.json"
 edit=False  # Bandera para saber si se ha editado el texto
-
-# lista de colores que quedara como uno en comun
-colores_comunes_punt = {
-    'PLUS',
-    'MINUS',
-    'MULT',
-    'DIV',
-    'MOD',
-    'EQUALS',
-    'DIFF',
-    'LESS',
-    'LESSEQ',
-    'GREATER',
-    'GREATERQ',
-    'ASSIGN',
-    'LPAREN',
-    'RPAREN',
-    'LBRACE',
-    'RBRACE',
-    'LBRACKET',
-    'RBRACKET',
-    'COMMA',
-    'COLON',
-    'TERM',
-    'INCREMENT',
-    'DECREMENT',
-    'AND',
-    'OR',
-    'NOT'
-}
-
-colores_comunes_reserv = {
-    'IF',
-    'ELSE',
-    'WHILE',
-    'FOR',
-    'IN',
-    'RANGE',
-    'DEF',
-    'TYPE',
-    'BOOL',
-    'NONE',
-    'PRINT',
-    'INPUT',
-}        
-
-
-# Cargar colores del archivo si existe
-def cargar_colores():
-    if os.path.exists(arch_colors):
-        with open(arch_colors, "r") as archivo:
-            return json.load(archivo)
-    # Si no existe, usa colores predeterminados
-    else:
-        tepcolors = {
-            'ID': '#f92672',
-            'FLOAT': '#ae81ff',
-            'INT': '#ae81ff',
-            'STRING': '#EBA500',#color naranja
-            'PLUS': '#f8f8f2',
-            'MINUS': '#f8f8f2',
-            'MULT': '#f8f8f2',
-            'DIV': '#f8f8f2',
-            'MOD': '#f8f8f2',
-            'EQUALS': '#f8f8f2',
-            'DIFF': '#f8f8f2',
-            'LESS': '#f8f8f2',
-            'LESSEQ': '#f8f8f2',
-            'GREATER': '#f8f8f2',
-            'GREATERQ': '#f8f8f2',
-            'ASSIGN': '#f8f8f2',
-            'LPAREN': '#f8f8f2',
-            'RPAREN': '#f8f8f2',
-            'LBRACE': '#f8f8f2',
-            'RBRACE': '#f8f8f2',
-            'LBRACKET': '#f8f8f2',
-            'RBRACKET': '#f8f8f2',
-            'COMMA': '#f8f8f2',
-            'COLON': '#f8f8f2',
-            'TERM': '#f8f8f2',
-            'INCREMENT': '#f8f8f2',
-            'DECREMENT': '#f8f8f2',
-            'AND': '#f8f8f2',
-            'OR': '#f8f8f2',
-            'NOT': '#f8f8f2',
-            'IF': '#a6e22e',
-            'ELSE': '#a6e22e',
-            'WHILE': '#a6e22e',
-            'FOR': '#a6e22e',
-            'IN': '#a6e22e',
-            'RANGE': '#a6e22e',
-            'DEF': '#a6e22e',
-            'TYPE': '#a6e22e',
-            'BOOL': '#a6e22e',
-            'NONE': '#a6e22e',
-            'PRINT': '#a6e22e',
-            'INPUT': '#a6e22e',
-            'RETURN': "#f92694",
-            'LEN': '#f21231',
-            'COMMENT': '#75715e'
-        }
-        with open(arch_colors, "w") as archivo:
-            json.dump(tepcolors, archivo, indent=4)
-        return tepcolors 
-    
-# Cargar colores iniciales
-colortex = cargar_colores()
-
-def guardar_colores():
-    with open(arch_colors, "w") as archivo:
-        json.dump(colortex, archivo, indent=4)
-
-# Función para cambiar el color de un token
-    
-
+#Clase de Lexico
+DFA = Automata()
 
 # Funciones para el menú
+#nuevo archivo
 def nuevo():
     """Crea un nuevo archivo."""
+    global ruta, edit
+
+    if(edit):
+        if messagebox.askyesno("Nuevo archivo", "¿Desea guardar los cambios antes de crear un nuevo archivo?"):
+            guardar()
+            nuevo_arc()
+        else:
+            nuevo_arc() 
+    else:
+        nuevo_arc()
+    
+#ajustes para el nuevou archivo
+def nuevo_arc():
     global ruta, edit
     mensaje.set("Nuevo fichero")
     ruta = ""
     texto.delete("1.0", END)
     actualizar_numeros_linea()
-    root.title("Mi editor")
+    root.title("IDE PyC")
     edit = False
+
 
 def abrir():
     """Función para abrir un archivo sin trabar la interfaz gráfica."""
@@ -174,6 +75,8 @@ def leer_archivo(ruta):
         show_cursor_position(None)  # Mostrar posición del cursor
         root.title(f"{ruta} - Mi editor")
         mensaje.set("Archivo cargado correctamente")
+        # Colorear el texto cargado
+        debounce_colorText()
         global edit
         edit = False
 
@@ -258,7 +161,7 @@ def on_text_change(event):
     actualizar_numeros_linea()
     global edit
     edit=True
-    #colorTexto(None)
+
     texto.edit_modified(False)  # Restablecer la bandera de modificación
 
 # Función para sincronizar el desplazamiento
@@ -272,62 +175,54 @@ def sync_scroll(*args):
     lineas.yview("moveto", args[0])
 
 # Función para iniciar el hilo de coloreado de texto
-def colorTexto(event=None):
-    colorthread = threading.Thread(target=colorTextoThread)
-    colorthread.start()
+def colorText():
+    DFA.process(texto.get("1.0", "end-1c"))  # Procesar el texto actual
+    resultado_automata = DFA.tokens  # Obtener los tokens procesados
+    texto.config(state="disabled")
 
-# Función para colorear el texto
-def colorTextoThread():
-    # Obtener el contenido completo del texto
-    contenido = texto.get("1.0", END)
+    # Definir colores para cada tipo de token
+    colores = {
+        "IDENTIFICADOR": "#C678DD",   # Lavanda suave, usado para variables
+        "OTRO": "#ABB2BF",            # Gris claro, para texto neutro o no categorizado
+        "OPERADOR": "#56B6C2",        # Azul verdoso, bien contrastado
+        "NUMERO": "#D19A66",          # Naranja suave, típico para números
+        "ASIGNACION": "#E5C07B",      # Amarillo dorado, resalta sin molestar
+        "CADENA": "#98C379",          # Verde claro, ideal para cadenas
+        "COMENTARIO": "#5C6370",      # Gris azulado apagado, sutil pero visible
+        "COMPARACION": "#56B6C2",     # Igual que operador para coherencia
+        "SIMBOLO": "#61AFEF",         # Azul claro, resalta bien en fondos oscuros
+        "LOGICO": "#BE5046",          # Rojo ladrillo, da contraste a los operadores lógicos
+        "RESERVADA": "#61AFEF"        # Azul fuerte, común en palabras clave
+    }
+
     
-    # Obtener los tokens
-    tokens = lexer_color(contenido)
+    # Crear tags para cada tipo de token
+    for tipo, color in colores.items():
+        texto.tag_configure(tipo, foreground=color)
     
-    # Eliminar cualquier formato previo
-    for tag in texto.tag_names():
-        texto.tag_remove(tag, "1.0", END)
-    
-    # Configurar los tags de colores
-    for palabra, color in colortex.items():
-        texto.tag_config(palabra, foreground=color)
-    
-    # Posición actual en el texto
-    pos = "1.0"
-    
-    for token_type, token_value, token_ID in tokens:
-        # Encontrar la siguiente ocurrencia del token
-        try:
-            
-            # Buscar el token exacto
-            start_pos = texto.search(
-                re.escape(token_value),
-                pos,
-                END,
-                regexp=True
-            )
-            
-            if not start_pos:
-                continue
+    # Colorear tokens en el texto
+    for token, tipo in resultado_automata:
+        if tipo in colores:
+            # Buscar todas las ocurrencias del token en el texto
+            start_index = "1.0"
+            while True:
+                start_index = texto.search(token, start_index, stopindex="end", exact=True)
+                if not start_index:
+                    break
                 
-            # Calcular la posición final
-            end_pos = f"{start_pos}+{len(token_value)}c"
-            
-            # Aplicar el tag correspondiente
-            if token_type in colortex:
-                texto.tag_add(token_type, start_pos, end_pos)                
-            else:
-                texto.tag_add("ID", start_pos, end_pos)
-            
-            # Actualizar la posición para la siguiente búsqueda
-            pos = end_pos
+                end_index = f"{start_index}+{len(token)}c"
+                texto.tag_add(tipo, start_index, end_index)
+                start_index = end_index
+    
+    # Hacer que el texto sea de solo lectura
+    texto.config(state="normal")
+    
 
-            
-        except Exception as e:
-            print(f"Error al colorear token {token_type}: {token_value}", e)
-            re.purge()
-            continue
-    re.purge()
+# Función para evitar llamadas repetidas a la función de resaltado
+def debounce_colorText():
+    if hasattr(debounce_colorText, "after_id"):
+        texto.after_cancel(debounce_colorText.after_id)
+    debounce_colorText.after_id = texto.after(500, colorText) 
 
 # Función para ejecutar el código
 def ejecutar_codigo():
@@ -342,24 +237,20 @@ def thread_ejecutar():
     Función que simula la ejecución del código ingresado.
     """
     contenido = texto.get("1.0", 'end-1c')  # Obtiene el contenido del editor
-    mensaje.set("Ejecutando código...")  
-    tokens, errors = lexer(contenido)
-    #mandar a la terminal lexica
-    terminalex.config(state="normal")  # Habilitar la edición
-    terminalex.delete("1.0", END)
+    if contenido.strip() == "":
+        mensaje.set("No hay código para ejecutar")
+        return  
+    else:
+        mensaje.set("Ejecutando código...")
+        
+        DFA.process(contenido)  # Establece el texto en el analizador léxico
 
-    terminalerlex.config(state="normal")  # Habilitar la edición
-    terminalerlex.delete("1.0", END)
-    #abrir terminal
-    for token in tokens:
-        terminalex.insert(END, f"{token}\n")
-
-    for error in errors:
-        #print(f"Línea {error[0]}, Columna {error[1]}: {error[2]}")
-        terminalerlex.insert(END, f"Línea {error[0]}, Columna {error[1]}: {error[2]}\n")
-
-    terminalex.config(state="disabled")  # Deshabilitar la edición
-    terminalerlex.config(state="disabled")  # Deshabilitar la edición
+        for token in DFA.tokens:
+            terminalex.config(state="normal")
+            terminalex.insert(END, f"{token[0]}: {token[1]}\n")
+        
+        terminalex.config(state="disabled")  # Deshabilitar la edición
+        terminalerlex.config(state="disabled")  # Deshabilitar la edición
 
 # Función para mostrar la posición del cursor
 def show_cursor_position(event):
@@ -375,231 +266,15 @@ def tread_showcursor():
 
 # Ventas fuera de la principal
 def colortexto():
-    # Crear y configurar la ventana principal
-    colorselec = Tk()
-    colorselec.title("Personalización de Colores IDE")
-    colorselec.configure(bg="#1e1e1e")
-    
-    # Agregar un poco de padding general
-    colorselec.geometry("900x500")
-    colorselec.resizable(False, False)
-    
-    # Marco principal con efecto de sombra
-    marco_principal = Frame(
-        colorselec,
-        bg="#1e1e1e",
-        highlightbackground="#333333",
-        highlightthickness=1
-    )
-    marco_principal.pack(padx=20, pady=20, fill=BOTH, expand=True)
-    
-    # Título decorativo
-    Label(
-        marco_principal,
-        text="Vista Previa del Código",
-        font=("Arial", 12, "bold"),
-        bg="#1e1e1e",
-        fg="#ffffff"
-    ).grid(row=0, column=0, pady=10, padx=10, sticky="w")
-    
-    # Área de texto mejorada
-    texto_muestra = Text(
-        marco_principal,
-        height=12,
-        width=50,
-        bg="#1e1e1e",
-        fg="white",
-        font=("Consolas", 12),
-        padx=15,
-        pady=15,
-        wrap=WORD,
-        insertbackground="white"  # Cursor blanco
-    )
-    texto_muestra.grid(row=1, column=0, padx=10, pady=5, sticky="nsew")
-    
-    # Texto de ejemplo más elaborado
-    codigo_ejemplo = '''def ejemplo_funcion():
-    # Este es un comentario de ejemplo
-    mensaje = "¡Hola, mundo!"
-    print(mensaje)
-    
-    # Prueba los colores aquí
-    for i in range(3):
-        print(f"Contador: {i}")'''
-    
-    texto_muestra.insert(INSERT, codigo_ejemplo)
-    
-    # Marco para selección de colores con título
-    Label(
-        marco_principal,
-        text="Selección de Colores",
-        font=("Arial", 12, "bold"),
-        bg="#1e1e1e",
-        fg="#ffffff"
-    ).grid(row=0, column=2, pady=10, padx=10, sticky="w")
-    
-    # Contenedor con scroll para los colores
-    contenedor_scroll = Frame(marco_principal)
-    contenedor_scroll.grid(row=1, column=2, padx=20, pady=5, sticky="nsew")
-    
-    canvas = Canvas(contenedor_scroll, bg="#1e1e1e", highlightthickness=0)
-    scrollbar = Scrollbar(contenedor_scroll, orient=VERTICAL, command=canvas.yview)
-    marco_derecho = Frame(canvas, bg="#1e1e1e")
-    
-    marco_derecho.bind(
-        "<Configure>",
-        lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
-    )
-    
-    canvas.create_window((0, 0), window=marco_derecho, anchor="nw")
-    canvas.configure(yscrollcommand=scrollbar.set)
-    
-    canvas.pack(side=LEFT, fill=BOTH, expand=True)
-    scrollbar.pack(side=RIGHT, fill=Y)
-    
-    # Función para crear filas de colores más estilizadas
-    def crear_fila_color(parent, texto, color, textocop):
-        frame = Frame(parent, bg="#1e1e1e", pady=5)
-        frame.pack(fill=X)
+    """Abre una ventana para elegir el color del texto."""
+    color = colorchooser.askcolor(title="Selecciona un color")
+    if color[1]:
+        texto.config(fg=color[1])
+        lineas.config(fg=color[1])
+        mensaje.set("Color de texto cambiado")
+    else:
+        mensaje.set("Selección de color cancelada")
 
-        # Etiqueta con el nombre del color
-        Label(
-            frame,
-            text=texto,
-            width=15,
-            anchor="w",
-            bg="#1e1e1e",
-            fg="white",
-            font=("Arial", 10)
-        ).pack(side=LEFT)
-        
-        # Muestra del color actual
-        muestra_color = Label(
-            frame,
-            bg=color,
-            width=8,
-            height=1,
-            relief="raised"
-        )
-        muestra_color.pack(side=LEFT, padx=10)
-        
-        # Botón para cambiar el color
-        btn= Button(
-            frame,
-            text="Cambiar",
-            command=lambda: cambiar_color(texto, muestra_color),
-            bg="#333333",
-            fg="white",
-            relief="raised"
-        )
-        btn.pack(side=LEFT, padx=10)
-    
-    # Función para cambiar el color de un token
-    def cambiar_color(id_label, color_label):
-        colorsec = colorchooser.askcolor(title=f"Selecciona un color para {id_label}", parent=colorselec)
-        if colorsec[1]:  # color[1] contiene el valor hexadecimal del color
-            color_label.config(bg=colorsec[1])
-            if id_label=="Operadores":
-                print("Operadores")
-                for nombre, color in colortex.items():
-                    if nombre in colores_comunes_punt:
-                        colortex[nombre] = colorsec[1]
-            elif id_label=="Palabras Reservadas":
-                for nombre, color in colortex.items():
-                    if nombre in colores_comunes_reserv:
-                        colortex[nombre] = colorsec[1]
-            else:
-                colortex[id_label] = colorsec[1]
-            guardar_colores()
-            colorcambsel(texto_muestra)
-
-    # si se encontro un color comun
-    ccp=False
-    ccr=False
-
-    # Crear filas de colores
-    for nombre, color in colortex.items():
-        #si es difernete a los colores comunes agregarlo
-        if nombre not in colores_comunes_punt and nombre not in colores_comunes_reserv:
-            crear_fila_color(marco_derecho, nombre, color, texto_muestra)
-        #si es igual a los colores comunes agregarlo
-        elif nombre in colores_comunes_punt:
-            if not ccp:
-                crear_fila_color(marco_derecho, "Operadores", color,texto_muestra)
-                ccp=True
-        elif nombre in colores_comunes_reserv:
-            if not ccr:
-                crear_fila_color(marco_derecho, "Palabras Reservadas", color,texto_muestra)
-                ccr=True
-        else:
-            print("Error al agregar el color", nombre)
-                
-        
-
-    # Hacer que el área de texto sea expandible
-    marco_principal.grid_columnconfigure(0, weight=1)
-    marco_principal.grid_rowconfigure(1, weight=1)
-
-    #poner color en el texto
-    colorcambsel(texto_muestra)
-    
-    # Iniciar la ventana
-    colorselec.mainloop()
-
-    # Función para colorear el texto de cambio de color
-def colorcambsel(intput_text):
-
-    # Obtener el contenido completo del texto
-    contenido = intput_text.get("1.0", END)
-    
-    # Obtener los tokens
-    tokens = lexer_color(contenido)
-    
-    # Eliminar cualquier formato previo
-    for tag in intput_text.tag_names():
-        intput_text.tag_remove(tag, "1.0", END)
-    
-    # Configurar los tags de colores
-    for palabra, color in colortex.items():
-        intput_text.tag_config(palabra, foreground=color)
-    
-    # Posición actual en el texto
-    pos = "1.0"
-    
-    for token_type, token_value in tokens:
-        # Encontrar la siguiente ocurrencia del token
-        try:
-            
-            # Buscar el token exacto
-            start_pos = intput_text.search(
-                re.escape(token_value),
-                pos,
-                END,
-                regexp=True # No usar expresiones regulares
-            )
-
-            
-            if not start_pos:
-                continue
-                
-            # Calcular la posición final
-            end_pos = f"{start_pos}+{len(token_value)}c"
-            
-            # Aplicar el tag correspondiente
-            if token_type in colortex:
-                intput_text.tag_add(token_type, start_pos, end_pos)                
-            else:
-                intput_text.tag_add("ID", start_pos, end_pos)
-            
-            # Actualizar la posición para la siguiente búsqueda
-            pos = end_pos
-
-            
-        except Exception as e:
-            print(f"Error al colorear token {token_type}: {token_value}", e)
-            re.purge()
-            continue
-    re.purge()
 ##### Fin de ventanas fuera de la principal
 
 
@@ -640,6 +315,33 @@ menubar.config(bg="#2d2d2d", fg="#d4d4d4")
 filemenu.config(bg="#2d2d2d", fg="#d4d4d4", activebackground="#3c3c3c", activeforeground="#d4d4d4")
 Configmenu.config(bg="#2d2d2d", fg="#d4d4d4", activebackground="#3c3c3c", activeforeground="#d4d4d4")
 root.config(menu=menubar)
+
+#Bar de iconos
+iconbar = Frame(root, bg="#2d2d2d")
+iconbar.pack(fill="x")
+
+# Iconos
+nuevo_icon = PhotoImage(file="icons/nuevo.png")
+# ajustar tamaño de icono
+nuevo_icon = nuevo_icon.subsample(20, 20)
+nuevo_btn = Button(iconbar, image=nuevo_icon, command=nuevo, bg="#999999", activebackground="#3c3c3c")
+nuevo_btn.pack(side="left", padx=5, pady=5)
+
+abrir_icon = PhotoImage(file="icons/abrir.png")
+abrir_icon = abrir_icon.subsample(20, 20)
+abrir_btn = Button(iconbar, image=abrir_icon, command=abrir, bg="#999999", activebackground="#3c3c3c")
+abrir_btn.pack(side="left", padx=5, pady=5)
+
+guardar_icon = PhotoImage(file="icons/guardar.png")
+guardar_icon = guardar_icon.subsample(20, 20)
+guardar_btn = Button(iconbar, image=guardar_icon, command=guardar, bg="#999999", activebackground="#3c3c3c")
+guardar_btn.pack(side="left", padx=5, pady=5)
+
+guardar_como_icon = PhotoImage(file="icons/guardar_como.png")
+guardar_como_icon = guardar_como_icon.subsample(20, 20)
+guardar_como_btn = Button(iconbar, image=guardar_como_icon, command=guardar_como, bg="#999999", activebackground="#3c3c3c")
+guardar_como_btn.pack(side="left", padx=5, pady=5)
+
 
 
 # Frame para contener el área de texto y los números de línea
@@ -744,6 +446,8 @@ notebook.add(frame_terminalsem, text="Errores Semáticos")
 # Vincular el evento de modificación para actualizar los números de línea automáticamente
 texto.bind("<<Modified>>", on_text_change)
 texto.bind("<KeyRelease>", show_cursor_position)
+texto.bind("<KeyRelease>", lambda e: debounce_colorText())
+texto.bind("<Button-1>",show_cursor_position)
 
 #combinaciones de teclas
 root.bind("<Control-n>", lambda e: nuevo())

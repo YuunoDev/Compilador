@@ -12,5 +12,5 @@ print("a");
 
 print("Hola que tal");
 
-#asdasdadsasd
+//asdasdadsasd
 print(1+3);
