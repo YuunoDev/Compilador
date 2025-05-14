@@ -2,6 +2,7 @@ from tkinter import *
 from tkinter import filedialog as FileDialog
 from tkinter import ttk
 from tkinter import colorchooser
+import tkinter as tk
 import threading
 import re
 from tkinter import messagebox
@@ -16,6 +17,7 @@ ruta = ""
 edit=False  # Bandera para saber si se ha editado el texto
 #Clase de Lexico
 DFA = Automata()
+DFAC = Automata()
 
 # Funciones para el menú
 #nuevo archivo
@@ -176,45 +178,66 @@ def sync_scroll(*args):
 
 # Función para iniciar el hilo de coloreado de texto
 def colorText():
-    DFA.process(texto.get("1.0", "end-1c"))  # Procesar el texto actual
-    resultado_automata = DFA.tokens  # Obtener los tokens procesados
+    contenido = texto.get("1.0", 'end-1c')  # Obtiene el contenido del editor
+
+    DFAC.process(contenido)  # Procesar el texto actual
+
+    resultado_automata = DFAC.tokens  # Obtener los tokens procesados
     texto.config(state="disabled")
+
+    #mostrar en terminal sitantactica
+    terminalsy.config(state="normal")
+    terminalsy.delete("1.0", END)
+    for token in resultado_automata:
+        terminalsy.insert(END, f"{token[0]}: {token[1]}\n")
+    terminalsy.config(state="disabled")
 
     # Definir colores para cada tipo de token
     colores = {
+        "COMENTARIO": "#407a33",      # Gris azulado apagado, sutil pero visible
         "IDENTIFICADOR": "#C678DD",   # Lavanda suave, usado para variables
+        "RESERVADA": "#61AFEF",        # Azul fuerte, común en palabras clave
         "OTRO": "#ABB2BF",            # Gris claro, para texto neutro o no categorizado
         "OPERADOR": "#56B6C2",        # Azul verdoso, bien contrastado
-        "NUMERO": "#D19A66",          # Naranja suave, típico para números
+        "NUMERO ENTERO": "#D19A66",          # Naranja suave, típico para números
         "ASIGNACION": "#E5C07B",      # Amarillo dorado, resalta sin molestar
         "CADENA": "#98C379",          # Verde claro, ideal para cadenas
-        "COMENTARIO": "#5C6370",      # Gris azulado apagado, sutil pero visible
         "COMPARACION": "#56B6C2",     # Igual que operador para coherencia
         "SIMBOLO": "#61AFEF",         # Azul claro, resalta bien en fondos oscuros
         "LOGICO": "#BE5046",          # Rojo ladrillo, da contraste a los operadores lógicos
-        "RESERVADA": "#61AFEF"        # Azul fuerte, común en palabras clave
+        "ERRORES": "#FF0000",          # Rojo brillante, para errores
+        "NUMERO REAL": "#D19A66",     # Naranja suave, para números reales
+        "DESCONOCIDO": "#d4d4d4",   # Rojo brillante, para errores
     }
 
-    
+    texto.tag_delete(*texto.tag_names())  # Elimina todos los tags
+
     # Crear tags para cada tipo de token
     for tipo, color in colores.items():
         texto.tag_configure(tipo, foreground=color)
     
     # Colorear tokens en el texto
-    for token, tipo in resultado_automata:
-        if tipo in colores:
-            # Buscar todas las ocurrencias del token en el texto
-            start_index = "1.0"
-            while True:
-                start_index = texto.search(token, start_index, stopindex="end", exact=True)
-                if not start_index:
-                    break
-                
-                end_index = f"{start_index}+{len(token)}c"
-                texto.tag_add(tipo, start_index, end_index)
-                start_index = end_index
+    for token_value, token_type, line, col in resultado_automata:
+        try:
+             # Calculate positions where col is the START of the token
+            start_line = line
+            start_col = col
+            
+            # Calculate the end position by adding the length of the token
+            end_line = line
+            end_col = col + len(token_value)
+            
+            # Convert to string format for Tkinter
+            start_pos = f"{start_line}.{start_col}"
+            end_pos = f"{end_line}.{end_col}"
+            
+            # Apply the tag - make sure the positions are valid
+            texto.tag_add(token_type, start_pos, end_pos)
+        except tk.TclError as e:
+            print(f"Error highlighting token {token_value}: {e}")
+            continue
     
-    # Hacer que el texto sea de solo lectura
+    # Hacer que el texto sea editable nuevamente
     texto.config(state="normal")
     
 
@@ -222,7 +245,7 @@ def colorText():
 def debounce_colorText():
     if hasattr(debounce_colorText, "after_id"):
         texto.after_cancel(debounce_colorText.after_id)
-    debounce_colorText.after_id = texto.after(500, colorText) 
+    debounce_colorText.after_id = texto.after(400, colorText) 
 
 # Función para ejecutar el código
 def ejecutar_codigo():
@@ -241,13 +264,41 @@ def thread_ejecutar():
         mensaje.set("No hay código para ejecutar")
         return  
     else:
+        # Limpiar las terminales
+        terminalex.config(state="normal")
+        terminalex.delete("1.0", END)
+        terminalerlex.config(state="normal")
+        terminalerlex.delete("1.0", END)
+
+        # Terminal de ejecución
+        terminalej.config(state="normal")
+        terminalej.delete("1.0", END)
+        terminalej.insert(END, "Ejecutando código...\n")
+        terminalej.config(state="disabled")
+
         mensaje.set("Ejecutando código...")
         
         DFA.process(contenido)  # Establece el texto en el analizador léxico
+        DFA.deleteCommentandError()  # Elimina los comentarios del texto
 
         for token in DFA.tokens:
             terminalex.config(state="normal")
             terminalex.insert(END, f"{token[0]}: {token[1]}\n")
+
+
+        # print("\nErrores:")
+        # for error in DFA.errors:
+        #    print(error)
+        for error in DFA.errors:
+            terminalerlex.config(state="normal")
+            terminalerlex.insert(END, error + "\n")
+
+         # Si el archivo existe, lo eliminamos
+        if os.path.exists("token.tk"):
+            print("El archivo ya existe, se eliminará.")
+            os.remove("token.tk")
+
+        DFA.genarch("token.tk")  # Genera el árbol sintáctico
         
         terminalex.config(state="disabled")  # Deshabilitar la edición
         terminalerlex.config(state="disabled")  # Deshabilitar la edición
@@ -257,13 +308,10 @@ def show_cursor_position(event):
     """
     Muestra la posición del cursor en el monitor inferior.
     """
-    treadsh=threading.Thread(target=tread_showcursor)
-    treadsh.start()
-
-def tread_showcursor():
     cursor_pos = texto.index(INSERT)
     mensaje2.set(f"Línea: {cursor_pos.split('.')[0]}, Columna: {cursor_pos.split('.')[1]}")
 
+    
 # Ventas fuera de la principal
 def colortexto():
     """Abre una ventana para elegir el color del texto."""
@@ -274,6 +322,11 @@ def colortexto():
         mensaje.set("Color de texto cambiado")
     else:
         mensaje.set("Selección de color cancelada")
+
+def on_key_release(event):
+    """Maneja tanto la actualización de la posición del cursor como el coloreado del texto."""
+    show_cursor_position(event)
+    debounce_colorText()
 
 ##### Fin de ventanas fuera de la principal
 
@@ -360,7 +413,7 @@ lineas.config(bg="#2d2d2d", fg="#d4d4d4")
 texto = Text(frame, bd=0, padx=6, pady=4, font=("Consolas", 12), undo=True,  wrap="none")
 
 # Colores para el área de texto principal
-texto.config(bg="#1e1e1e", fg="#d4d4d4", insertbackground="#d4d4d4")
+texto.config(bg="#1e1e1e", fg="#407a33", insertbackground="#d4d4d4")
 
 # Añadir el widget de texto al frame
 texto.pack(side="left", fill="both", expand=True)
@@ -445,9 +498,8 @@ notebook.add(frame_terminalsem, text="Errores Semáticos")
 
 # Vincular el evento de modificación para actualizar los números de línea automáticamente
 texto.bind("<<Modified>>", on_text_change)
-texto.bind("<KeyRelease>", show_cursor_position)
-texto.bind("<KeyRelease>", lambda e: debounce_colorText())
-texto.bind("<Button-1>",show_cursor_position)
+texto.bind("<KeyRelease>", on_key_release)
+texto.bind("<Button-1>", show_cursor_position)
 
 #combinaciones de teclas
 root.bind("<Control-n>", lambda e: nuevo())
