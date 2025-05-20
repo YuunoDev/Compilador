@@ -2,7 +2,7 @@ import re
 import os
 
 # Tamaño reservado para Tokens
-TOKEN_SIZE = 264
+TOKEN_SIZE = 999999
 
 class Automata:
     # Constructor de la clase
@@ -48,7 +48,7 @@ class Automata:
             return "COMENTARIO"
         elif self.state == 12:
             return "COMENTARIO"
-        elif self.state == 13:
+        elif self.state == 13: # comentario multilínea
             return "COMENTARIO"
         elif self.state == 14:
             return "LOGICO"
@@ -87,10 +87,25 @@ class Automata:
         else:
             self.errors.append("Error: Token no valido")
 
+    def calcposcomment(self):
+        #calcular la posicion del comentario
+        lines = self.line
+        line= lines - self.token.count("\n")
+        #tomar la primera linea del comentario y ver cual es la columna donde inicia
+        lineofcomment = self.token.split("\n")[0]
+        #calcular la columna del comentario
+        column = len(lineofcomment) - len(lineofcomment.lstrip())
+
+        self.tokens.append((self.token, "COMENTARIO", line, column))
+        
+
     #añadir el token a la lista de tokens y su tipo
     def addTokens(self):
         #self.tokens.append((self.stareName(), self.token))
-        self.tokens.append((self.token, self.stareName(), self.line, self.column-len(self.token)))
+        if self.state == 13:
+            self.calcposcomment()
+        else:
+            self.tokens.append((self.token, self.stareName(), self.line, self.column-len(self.token)))
         #añadir el token a la lista de tokens y su tipo
         self.token = ""
         self.state = 0
@@ -282,8 +297,7 @@ class Automata:
                 elif char == "*":
                     self.state = 13
                     self.andChar(char)
-                else:
-                    self.error(11)
+                
 
             elif self.state == 12:
                 if char == "\n":
@@ -292,8 +306,7 @@ class Automata:
                 elif re.match(r"[a-zA-Z]", char) or char.isdigit():
                     self.state = 12
                     self.andChar(char)
-                else:
-                    self.error(12)
+                
 
 
             elif self.state == 13:
@@ -309,8 +322,7 @@ class Automata:
                 elif re.match(r"[a-zA-Z]", char) or char.isdigit():
                     self.state = 11
                     self.andChar(char)
-                else:
-                    self.error(11)
+                
 
             elif self.state == 14:
                 if char == "&":
@@ -370,15 +382,15 @@ class Automata:
                 file.write(token[0] + " " + token[1] + "\n")
 
 
-DFA = Automata()
+#DFA = Automata()
 
 #lectura de archivo
-with open("prov2.txt", "r", encoding="utf-8", errors="ignore") as file:
-   code = file.read()
+#with open("prov2.txt", "r", encoding="utf-8", errors="ignore") as file:
+#    code = file.read()
 
-DFA.process(code)
+#DFA.process(code)
 
-# print("Tokens:")
+#print("Tokens:")
 # print("-----------------------------------------------------")
 # print("Token", "Tipo", "Linea", "Columna")
 #for token in DFA.tokens:

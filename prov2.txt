@@ -6,11 +6,20 @@ int b=23;
 
 float bc=10.0;
 
-bool v=True;
+bool v=True; //hola
+
+/* Este es un
+comentario de
+múltiples líneas*/
 
 print("a");
 
 print("Hola que tal");
+
+/* Este es comentario
+Multi linea
+aaaa*/
+
 
 //asdasdadsasd
 print(1+3);

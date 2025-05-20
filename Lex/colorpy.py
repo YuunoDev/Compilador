@@ -1,6 +1,6 @@
 import tkinter as tk
 from tkinter import font
-import Anlex
+from Anlex import Automata
 
 def apply_syntax_highlighting(text_widget, tokens):
     """
@@ -9,6 +9,8 @@ def apply_syntax_highlighting(text_widget, tokens):
     Args:
         text_widget: A Tk Text widget
         tokens: A list of tokens in the format (value, type, line, col)
+        
+    Note: col represents the starting position of the token
     """
     # Clear any previous tags
     for tag in text_widget.tag_names():
@@ -17,19 +19,15 @@ def apply_syntax_highlighting(text_widget, tokens):
     
     # Define colors for different token types
     colors = {
-        "COMENTARIO": "#5C6370",      # Gris azulado apagado, sutil pero visible
-        "IDENTIFICADOR": "#C678DD",   # Lavanda suave, usado para variables
-        "RESERVADA": "#61AFEF",        # Azul fuerte, común en palabras clave
-        "OTRO": "#ABB2BF",            # Gris claro, para texto neutro o no categorizado
-        "OPERADOR": "#56B6C2",        # Azul verdoso, bien contrastado
-        "NUMERO ENTERO": "#D19A66",          # Naranja suave, típico para números
-        "ASIGNACION": "#E5C07B",      # Amarillo dorado, resalta sin molestar
-        "CADENA": "#98C379",          # Verde claro, ideal para cadenas
-        "COMPARACION": "#56B6C2",     # Igual que operador para coherencia
-        "SIMBOLO": "#61AFEF",         # Azul claro, resalta bien en fondos oscuros
-        "LOGICO": "#BE5046",          # Rojo ladrillo, da contraste a los operadores lógicos
-        "ERRORES": "#FF0000",          # Rojo brillante, para errores
-        "NUMERO REAL": "#D19A66",     # Naranja suave, para números reales
+        "RESERVADA": "#0000FF",       # Blue for reserved keywords
+        "IDENTIFICADOR": "#000000",   # Black for identifiers
+        "NUMERO ENTERO": "#FF6600",   # Orange for integers
+        "NUMERO REAL": "#FF6600",     # Orange for floats
+        "SIMBOLO": "#666666",         # Gray for symbols
+        "ASIGNACION": "#666666",      # Gray for assignment
+        "OPERADOR": "#666666",        # Gray for operators
+        "COMENTARIO": "#008800",      # Green for comments
+        "ERROR": "#FF0000"            # Red for errors
     }
     
     # Create tags for each token type
@@ -39,20 +37,46 @@ def apply_syntax_highlighting(text_widget, tokens):
     # Apply highlighting for each token
     for token_value, token_type, line, col in tokens:
         try:
-             # Calculate positions where col is the START of the token
-            start_line = line
-            start_col = col
-            
-            # Calculate the end position by adding the length of the token
-            end_line = line
-            end_col = col + len(token_value)
-            
-            # Convert to string format for Tkinter
-            start_pos = f"{start_line}.{start_col}"
-            end_pos = f"{end_line}.{end_col}"
-            
-            # Apply the tag - make sure the positions are valid
-            text_widget.tag_add(token_type, start_pos, end_pos)
+            # Handle multiline tokens (like multiline comments)
+            if '\n' in token_value:
+                # Split the token value by newline
+                lines = token_value.split('\n')
+                
+                # Process the first line
+                start_line = line
+                start_col = col
+                end_line = line
+                end_col = len(lines[0])  # End of first line
+                
+                start_pos = f"{start_line}.{start_col}"
+                end_pos = f"{end_line}.{end_col}"
+                text_widget.tag_add(token_type, start_pos, end_pos)
+                
+                # Process middle lines (if any)
+                for i in range(1, len(lines) - 1):
+                    curr_line = line + i
+                    text_widget.tag_add(token_type, f"{curr_line}.0", f"{curr_line}.{len(lines[i])}")
+                
+                # Process the last line
+                if len(lines) > 1:
+                    last_line = line + len(lines) - 1
+                    last_line_length = len(lines[-1])
+                    text_widget.tag_add(token_type, f"{last_line}.0", f"{last_line}.{last_line_length}")
+            else:
+                # Standard single-line token handling
+                start_line = line
+                start_col = col
+                
+                # Calculate the end position by adding the length of the token
+                end_line = line
+                end_col = col + len(token_value)
+                
+                # Convert to string format for Tkinter
+                start_pos = f"{start_line}.{start_col}"
+                end_pos = f"{end_line}.{end_col}"
+                
+                # Apply the tag
+                text_widget.tag_add(token_type, start_pos, end_pos)
         except tk.TclError as e:
             print(f"Error highlighting token {token_value}: {e}")
             continue
@@ -87,69 +111,87 @@ def main():
     root = tk.Tk()
     root.title("Syntax Highlighter Demo")
 
-    DFA = Anlex.Automata()
+
     
-    # # Sample code
+    # Sample code with multiline comment
+    # code = "int a;\n\na=12;\n\nint b=23;\n\nif (a == b) {\n    print(\"Equal\");\n}\n\n/* Este es un\ncomentario de\nmúltiples líneas */\n\nfloat bc=10.0;\n\nbool v=True;\n\nprint(\"a\");\n\nprint(\"Hola que tal\");\n\n//asdasdadsasd\nprint(1+3);"
+    
+    # Tokens with positions at the START of each token
+    #tokens = [
+    #     ('int', 'RESERVADA', 1, 0), 
+    #     ('a', 'IDENTIFICADOR', 1, 4), 
+    #     (';', 'SIMBOLO', 1, 5), 
+    #     ('a', 'IDENTIFICADOR', 3, 0), 
+    #     ('=', 'ASIGNACION', 3, 1), 
+    #     ('12', 'NUMERO ENTERO', 3, 2), 
+    #     (';', 'SIMBOLO', 3, 4), 
+    #     ('int', 'RESERVADA', 5, 0), 
+    #     ('b', 'IDENTIFICADOR', 5, 4), 
+    #     ('=', 'ASIGNACION', 5, 5), 
+    #     ('23', 'NUMERO ENTERO', 5, 6), 
+    #     (';', 'SIMBOLO', 5, 8),
+    #     ('if', 'RESERVADA', 7, 0),
+    #     ('(', 'SIMBOLO', 7, 3),
+    #     ('a', 'IDENTIFICADOR', 7, 4),
+    #     ('==', 'OPERADOR', 7, 6),
+    #     ('b', 'IDENTIFICADOR', 7, 9),
+    #     (')', 'SIMBOLO', 7, 10),
+    #     ('{', 'SIMBOLO', 7, 12),
+    #     ('print', 'IDENTIFICADOR', 8, 4),
+    #     ('(', 'SIMBOLO', 8, 9),
+    #     ('"', 'ERROR', 8, 10),
+    #     ('Equal', 'IDENTIFICADOR', 8, 11),
+    #     ('"', 'ERROR', 8, 16),
+    #     (')', 'SIMBOLO', 8, 17),
+    #     (';', 'SIMBOLO', 8, 18),
+    #     ('}', 'SIMBOLO', 9, 0),
+    #     ('/* Este es un\ncomentario de\nmúltiples líneas */', 'COMENTARIO', 11, 0),  # Comentario multilínea
+    #     ('float', 'RESERVADA', 15, 0), 
+    #     ('bc', 'IDENTIFICADOR', 15, 6), 
+    #     ('=', 'ASIGNACION', 15, 8), 
+    #     ('10.0', 'NUMERO REAL', 15, 9), 
+    #     (';', 'SIMBOLO', 15, 13), 
+    #     ('bool', 'RESERVADA', 17, 0), 
+    #     ('v', 'IDENTIFICADOR', 17, 5), 
+    #     ('=', 'ASIGNACION', 17, 6), 
+    #     ('True', 'RESERVADA', 17, 7), 
+    #     (';', 'SIMBOLO', 17, 11), 
+    #     ('print', 'IDENTIFICADOR', 19, 0), 
+    #     ('(', 'SIMBOLO', 19, 5), 
+    #     ('"', 'ERROR', 19, 6), 
+    #     ('a', 'IDENTIFICADOR', 19, 7), 
+    #     ('"', 'ERROR', 19, 8), 
+    #     (')', 'SIMBOLO', 19, 9), 
+    #     (';', 'SIMBOLO', 19, 10), 
+    #     ('print', 'IDENTIFICADOR', 21, 0), 
+    #     ('(', 'SIMBOLO', 21, 5), 
+    #     ('"', 'ERROR', 21, 6), 
+    #     ('Hola', 'IDENTIFICADOR', 21, 7), 
+    #     ('que', 'IDENTIFICADOR', 21, 12), 
+    #     ('tal', 'IDENTIFICADOR', 21, 16), 
+    #     ('"', 'ERROR', 21, 19), 
+    #     (')', 'SIMBOLO', 21, 20), 
+    #     (';', 'SIMBOLO', 21, 21), 
+    #     ('//asdasdadsasd', 'COMENTARIO', 23, 0), 
+    #     ('print', 'IDENTIFICADOR', 24, 0), 
+    #     ('(', 'SIMBOLO', 24, 5), 
+    #     ('1', 'NUMERO ENTERO', 24, 6), 
+    #     ('+', 'OPERADOR', 24, 7), 
+    #     ('3', 'NUMERO ENTERO', 24, 8), 
+    #     (')', 'SIMBOLO', 24, 9), 
+    #     (';', 'SIMBOLO', 24, 10)
+    # ]
+    
+    DFA = Automata()
+
+    #lectura de archivo
     with open("prov2.txt", "r", encoding="utf-8", errors="ignore") as file:
         code = file.read()
 
     DFA.process(code)
-    #code = "int a;\n\na=12;\n\nint b=23;\n\nfloat bc=10.0;\n\nbool v=True;\n\nprint(\"a\");\n\nprint(\"Hola que tal\");\n\n//asdasdadsasd\nprint(1+3);"
-    
-    # Corrected tokens with proper positions
-    # tokens = [
-    #     ('int', 'RESERVADA', 1, 3), 
-    #     ('a', 'IDENTIFICADOR', 1, 5), 
-    #     (';', 'SIMBOLO', 1, 6), 
-    #     ('a', 'IDENTIFICADOR', 3, 1), 
-    #     ('=', 'ASIGNACION', 3, 2), 
-    #     ('12', 'NUMERO ENTERO', 3, 4), 
-    #     (';', 'SIMBOLO', 3, 5), 
-    #     ('int', 'RESERVADA', 5, 3), 
-    #     ('b', 'IDENTIFICADOR', 5, 5), 
-    #     ('=', 'ASIGNACION', 5, 6), 
-    #     ('23', 'NUMERO ENTERO', 5, 8), 
-    #     (';', 'SIMBOLO', 5, 9), 
-    #     ('float', 'RESERVADA', 7, 5), 
-    #     ('bc', 'IDENTIFICADOR', 7, 8), 
-    #     ('=', 'ASIGNACION', 7, 9), 
-    #     ('10.0', 'NUMERO REAL', 7, 13), 
-    #     (';', 'SIMBOLO', 7, 14), 
-    #     ('bool', 'RESERVADA', 9, 4), 
-    #     ('v', 'IDENTIFICADOR', 9, 6), 
-    #     ('=', 'ASIGNACION', 9, 7), 
-    #     ('True', 'RESERVADA', 9, 11), 
-    #     (';', 'SIMBOLO', 9, 12), 
-    #     ('print', 'IDENTIFICADOR', 11, 5), 
-    #     ('(', 'SIMBOLO', 11, 6), 
-    #     ('"', 'ERROR', 11, 7), 
-    #     ('a', 'IDENTIFICADOR', 11, 8), 
-    #     ('"', 'ERROR', 11, 9), 
-    #     (')', 'SIMBOLO', 11, 10), 
-    #     (';', 'SIMBOLO', 11, 11), 
-    #     ('print', 'IDENTIFICADOR', 13, 5), 
-    #     ('(', 'SIMBOLO', 13, 6), 
-    #     ('"', 'ERROR', 13, 7), 
-    #     ('Hola', 'IDENTIFICADOR', 13, 11), 
-    #     ('que', 'IDENTIFICADOR', 13, 15), 
-    #     ('tal', 'IDENTIFICADOR', 13, 19), 
-    #     ('"', 'ERROR', 13, 20), 
-    #     (')', 'SIMBOLO', 13, 21), 
-    #     (';', 'SIMBOLO', 13, 22), 
-    #     ('//asdasdadsasd', 'COMENTARIO', 15, 14), 
-    #     ('print', 'IDENTIFICADOR', 16, 5), 
-    #     ('(', 'SIMBOLO', 16, 6), 
-    #     ('1', 'NUMERO ENTERO', 16, 7), 
-    #     ('+', 'OPERADOR', 16, 8), 
-    #     ('3', 'NUMERO ENTERO', 16, 9), 
-    #     (')', 'SIMBOLO', 16, 10), 
-    #     (';', 'SIMBOLO', 16, 11)
-    # ]
 
-    tokens = DFA.tokens
-    
     # Create and pack the text widget
-    text_widget = create_syntax_highlighter(root, tokens, code)
+    text_widget = create_syntax_highlighter(root, DFA.tokens, code)
     text_widget.pack(padx=10, pady=10, fill=tk.BOTH, expand=True)
     
     # Add a scrollbar

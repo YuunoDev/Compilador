@@ -182,15 +182,7 @@ def colorText():
 
     DFAC.process(contenido)  # Procesar el texto actual
 
-    resultado_automata = DFAC.tokens  # Obtener los tokens procesados
     texto.config(state="disabled")
-
-    #mostrar en terminal sitantactica
-    terminalsy.config(state="normal")
-    terminalsy.delete("1.0", END)
-    for token in resultado_automata:
-        terminalsy.insert(END, f"{token[0]}: {token[1]}\n")
-    terminalsy.config(state="disabled")
 
     # Definir colores para cada tipo de token
     colores = {
@@ -217,22 +209,47 @@ def colorText():
         texto.tag_configure(tipo, foreground=color)
     
     # Colorear tokens en el texto
-    for token_value, token_type, line, col in resultado_automata:
+    for token_value, token_type, line, col in DFAC.tokens:
         try:
-             # Calculate positions where col is the START of the token
-            start_line = line
-            start_col = col
-            
-            # Calculate the end position by adding the length of the token
-            end_line = line
-            end_col = col + len(token_value)
-            
-            # Convert to string format for Tkinter
-            start_pos = f"{start_line}.{start_col}"
-            end_pos = f"{end_line}.{end_col}"
-            
-            # Apply the tag - make sure the positions are valid
-            texto.tag_add(token_type, start_pos, end_pos)
+            if '\n' in token_value:
+                # Split the token value by newline
+                lines = token_value.split('\n')
+                
+                # Process the first line
+                start_line = line
+                start_col = col
+                end_line = line
+                end_col = len(lines[0])  # End of first line
+                
+                start_pos = f"{start_line}.{start_col}"
+                end_pos = f"{end_line}.{end_col}"
+                texto.tag_add(token_type, start_pos, end_pos)
+                
+                # Process middle lines (if any)
+                for i in range(1, len(lines) - 1):
+                    curr_line = line + i
+                    texto.tag_add(token_type, f"{curr_line}.0", f"{curr_line}.{len(lines[i])}")
+                
+                # Process the last line
+                if len(lines) > 1:
+                    last_line = line + len(lines) - 1
+                    last_line_length = len(lines[-1])
+                    texto.tag_add(token_type, f"{last_line}.0", f"{last_line}.{last_line_length}")
+            else:
+                # Calculate positions where col is the START of the token
+                start_line = line
+                start_col = col
+                
+                # Calculate the end position by adding the length of the token
+                end_line = line
+                end_col = col + len(token_value)
+                
+                # Convert to string format for Tkinter
+                start_pos = f"{start_line}.{start_col}"
+                end_pos = f"{end_line}.{end_col}"
+                
+                # Apply the tag - make sure the positions are valid
+                texto.tag_add(token_type, start_pos, end_pos)
         except tk.TclError as e:
             print(f"Error highlighting token {token_value}: {e}")
             continue
