@@ -296,6 +296,7 @@ def thread_ejecutar():
         mensaje.set("Ejecutando código...")
         
         DFA.process(contenido)  # Establece el texto en el analizador léxico
+        DFA.genarcherrores("errores.tk")  # Genera el árbol sintáctico
         DFA.deleteCommentandError()  # Elimina los comentarios del texto
 
         for token in DFA.tokens:

@@ -367,6 +367,12 @@ class Automata:
         if self.state not in [0, 13]:
             self.addTokens()
         return False
+    
+    def genarcherrores(self,arch):
+        # Luego lo creamos desde cero y escribimos los tokens
+        with open(arch, "w", encoding="utf-8") as file:
+            for error in self.errors:
+                file.write(error + "\n")
 
     def deleteCommentandError(self):
         # Eliminar los tokens que sean comentarios o errores
@@ -382,7 +388,7 @@ class Automata:
                 file.write(token[0] + " " + token[1] + "\n")
 
 
-#DFA = Automata()
+# DFA = Automata()
 
 #lectura de archivo
 #with open("prov2.txt", "r", encoding="utf-8", errors="ignore") as file:
