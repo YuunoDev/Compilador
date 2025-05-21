@@ -6,7 +6,6 @@ import tkinter as tk
 import threading
 import re
 from tkinter import messagebox
-from Comp import *
 from Lex.Anlex import *
 import json
 import os
