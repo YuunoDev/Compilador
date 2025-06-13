@@ -13,8 +13,10 @@ class Automata:
         self.position = 0
         self.line = 1
         self.column = 0
-        self.reserved = ["print","if", "else", "while", "end", "do", "switch","case", "int", "float","main", "cin", "char", "string", "bool", "True", "False", "return", "void", "break", "continue", "for", "foreach", "new", "delete", "this", "class", "public", "private", "protected", "static"]
+        self.reserved = ["print","if", "else", "while", "end", "do", "switch","case", "int", "float","main", "cin", "cout", "char", "string", "bool", "True", "False", "return", "void", "break", "continue", "for", "foreach", "new", "delete", "this", "class", "public", "private", "protected", "static", "until"]
         self.errors = []
+        self.columncomment = 0
+        self.linecomment = 0
 
     #Función para reiniciar el estado y el token
     def stateReset(self):
@@ -54,6 +56,10 @@ class Automata:
             return "LOGICO"
         elif self.state == 16:
             return "DESCONOCIDO"
+        elif self.state == 18:
+            return "CADENA"
+        elif self.state == 20: # << o >> para entrada/salida
+            return "SIMBOLO"
         else:
             return "DEFECTO"
 
@@ -104,6 +110,8 @@ class Automata:
         #self.tokens.append((self.stareName(), self.token))
         if self.state == 13:
             self.calcposcomment()
+        if self.state == 12:
+            self.tokens.append((self.token, "COMENTARIO", self.linecomment, self.columncomment))
         else:
             self.tokens.append((self.token, self.stareName(), self.line, self.column-len(self.token)))
         #añadir el token a la lista de tokens y su tipo
@@ -156,6 +164,8 @@ class Automata:
                     self.andChar(char)
                 elif char == "/":
                     self.state = 10
+                    self.linecomment = self.line
+                    self.columncomment = self.column
                     self.andChar(char)
                 elif char in ["&", "|"]:
                     self.state = 14
@@ -163,15 +173,15 @@ class Automata:
                 elif char in ["*", "%", "^"]:
                     self.state = 15
                     self.andChar(char)
-                
+                elif char == "\"":
+                    self.state = 18
+                    self.andChar(char)
                 else:
                     if char not in [" ", "\n", "\0"]:
                         self.andChar(char)
                         self.error(1)
                         self.state = 16
                         
-                    
-                   
 
             elif self.state == 1:  # número entero
                 if char.isdigit():
@@ -181,7 +191,6 @@ class Automata:
                     self.andChar(char)
                 else:
                     self.addTokens()               
-                    self.state = 0
                     continue  # << Volver a procesar el mismo caracter
 
             elif self.state == 2:  # identificador
@@ -189,7 +198,6 @@ class Automata:
                     self.andChar(char)
                 else:
                     self.addTokens()
-                    self.state = 0
                     continue
 
             elif self.state == 3:  # signo positivo
@@ -233,20 +241,47 @@ class Automata:
                     continue
 
             elif self.state == 5:
-                if self.token in ["<", ">",  "!"]:
+                # operadores de comparacion
+                if self.token == "=":
                     if char == "=":
                         self.andChar(char)
                         self.state = 6
                     else:
                         self.addTokens()
                         continue
-                elif self.token == "=":
+                elif self.token == "<":
+                    if char == "<":
+                        self.andChar(char)
+                        self.state = 20
+                    elif char == "=":
+                        self.andChar(char)
+                        self.state = 6
+                    else:
+                        self.state = 6
+                        self.addTokens()
+                        continue
+                elif self.token == ">":
+                    if char == ">":
+                        self.andChar(char)
+                        self.state = 20
+                    elif char == "=":
+                        self.andChar(char)
+                        self.state = 6
+                    else:
+                        self.state = 6
+                        self.addTokens()
+                        continue
+                elif self.token == "!":
                     if char == "=":
                         self.andChar(char)
                         self.state = 6
                     else:
                         self.addTokens()
                         continue
+                else:
+                    self.state = 6
+                    self.addTokens()
+                    continue  # << Volver a procesar el mismo caracter
             
             elif self.state == 6:
                 self.addTokens()
@@ -255,7 +290,6 @@ class Automata:
             elif self.state == 7:
                 # símbolos individuales, ya procesado
                 self.addTokens()
-                self.state = 0
                 continue
 
             elif self.state == 8:
@@ -275,53 +309,53 @@ class Automata:
                     self.state = 0
                     continue
 
+            # Comentarios
             elif self.state == 10:
                 if char == "*":
-                    self.state = 11
+                    self.state = 11     # Comentario varias lineas
                     self.andChar(char)
                 elif char == "/":
-                    self.state = 12
+                    self.state = 12    # Comentario de una sola linea
                     self.andChar(char)
                 else:
                     self.state = 3
                     self.addTokens()
-                    continue
+                    continue  # << Volver a procesar el mismo caracter
 
+            # Comentario varias lineas
             elif self.state == 11:
-                if char == "/":
-                    self.andChar(char)
-                elif char in [" ", "\n"]:
-                    self.andChar(char)
-                elif re.match(r"[a-zA-Z]", char) or char.isdigit():
-                    self.andChar(char)
-                elif char == "*":
+                if char == "*":
                     self.state = 13
+                    self.andChar(char)
+                else:
                     self.andChar(char)
                 
 
             elif self.state == 12:
+                #cualquier caracter que no sea salto de linea
                 if char == "\n":
-                    #self.andChar(char)
-                    self.addTokens()
-                elif re.match(r"[a-zA-Z]", char) or char.isdigit():
-                    self.state = 12
+                    self.state = 121
+                    self.andChar(" ")
+                else:
                     self.andChar(char)
-                
+                    
+            elif self.state == 121:
+                self.state = 12
+                self.addTokens()
+                continue  # << Volver a procesar el mismo caracter
 
-
+            # Comentario varias lineas
             elif self.state == 13:
-                if char == "*":
-                    self.state = 13
+                if char == "/":
+                    self.state = 131
                     self.andChar(char)
-                elif char == "/":
-                    self.state = 13
+                else:
                     self.andChar(char)
-                    self.addTokens()
-                elif char == "\n":
-                    self.andChar(char)
-                elif re.match(r"[a-zA-Z]", char) or char.isdigit():
-                    self.state = 11
-                    self.andChar(char)
+
+            elif self.state == 131:
+                self.state = 13
+                self.addTokens()
+                continue
                 
 
             elif self.state == 14:
@@ -350,6 +384,24 @@ class Automata:
 
             elif self.state == 17:
                 self.state = 3
+                self.addTokens()
+                continue
+
+            elif self.state == 18: #cadenas
+                if char == "\"":
+                    self.state = 19
+                    self.andChar(char)
+                elif char in [" ","\n"]:
+                    self.andChar(char)
+                elif re.match(r"[a-zA-Z]", char) or char.isdigit():
+                    self.andChar(char)
+                
+            elif self.state == 19:
+                self.state = 18
+                self.addTokens()
+                continue
+
+            elif self.state == 20:
                 self.addTokens()
                 continue
 
@@ -384,38 +436,22 @@ class Automata:
     def genarch(self,arch):
         # Luego lo creamos desde cero y escribimos los tokens
         with open(arch, "w", encoding="utf-8") as file:
-            for token in self.tokens:
-                file.write(token[0] + " " + token[1] + "\n")
+            for token in self.tokens:                         #linea            Columna
+                #file.write(f"lexema: {token[0]} tipo: {token[1]} linea: {token[2]} columna: {token[3]}\n")
+                #print(f"{t.tipo:<20} {t.lexema:<18} (línea {t.linea}, columna {t.columna})")
+                file.write(f"{token[1]:<20} {token[0]:<18} (línea {token[2]}, columna {token[3]})\n")
 
+    def mostrarTokens(self):
+        # Mostrar los tokens
+        for token in self.tokens:
+            print(f"{token[1]:<20} {token[0]:<18} (línea {token[2]}, columna {token[3]})")
 
 # DFA = Automata()
 
-#lectura de archivo
-#with open("prov2.txt", "r", encoding="utf-8", errors="ignore") as file:
+# #lectura de archivo
+# with open("provS.txt", "r", encoding="utf-8", errors="ignore") as file:
 #    code = file.read()
 
-#DFA.process(code)
+# DFA.process(code)
 
-#print("Tokens:")
-# print("-----------------------------------------------------")
-# print("Token", "Tipo", "Linea", "Columna")
-#for token in DFA.tokens:
-#    print(token[0], ":", token[1], "linea:", token[2], "columna:", token[3])
-# for token in DFA.tokens:
-#     print(token[0], ":", token[1], "linea:", token[2], "columna:", token[3])
-
-
-# for token in DFA.tokens:
-#    print(token[0], ":", token[1], "linea:", token[2], "columna:", token[3])
-
-# print("\n:")
-# print(DFA.tokens)
-# print("\nErrores:")
-# for error in DFA.errors:
-#    print(error)
-
-# print("sin comentarios: ")
-# print("Tokens:")
-# DFA.deleteComment()
-# for token in DFA.tokens:
-#     print(token[0], ":", token[1])
+# DFA.mostrarTokens()

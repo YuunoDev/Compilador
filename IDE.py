@@ -7,6 +7,7 @@ import threading
 import re
 from tkinter import messagebox
 from Lex.Anlex import *
+from Lex.AnSin import *
 import json
 import os
 
@@ -199,6 +200,8 @@ def colorText():
         "ERRORES": "#FF0000",          # Rojo brillante, para errores
         "NUMERO REAL": "#D19A66",     # Naranja suave, para números reales
         "DESCONOCIDO": "#d4d4d4",   # Rojo brillante, para errores
+        "CADENA": "#98C379",          # Verde claro, ideal para cadenas
+        "OPERATORIO": "#56B6C2",        # << y >> para entrada/salida
     }
 
     texto.tag_delete(*texto.tag_names())  # Elimina todos los tags
@@ -271,6 +274,82 @@ def ejecutar_codigo():
     ejecutar = threading.Thread(target=thread_ejecutar)
     ejecutar.start()
 
+
+def preparar_arbol():
+    #lipiar arbol
+    terminaltreeSin.delete(*terminaltreeSin.get_children())  # Limpiar el árbol
+   
+
+    tokens, errores_lexicos = cargar_tokens_desde_archivo("token.tk")
+
+    if errores_lexicos:
+        print("Errores encontrados al cargar tokens:")
+        for error in errores_lexicos:
+            print(f"  {error}")
+
+    if not tokens:
+        print("No se encontraron tokens válidos en el archivo.")
+        # Mostrar solo los errores léxicos si no hay tokens
+        cargar_arbol(ASTNode("Programa_Vacío"), errores_lexicos)
+    else:
+        print(f"Se cargaron {len(tokens)} tokens exitosamente.")
+        
+        # Crear parser y analizar
+        parser = Parser(tokens)
+        ast = parser.parse()
+        
+        # Combinar errores léxicos y de parsing
+        todos_errores = errores_lexicos + parser.errores
+    
+        # Mostrar resultados
+        print(f"\nAnálisis completado:")
+        print(f"  - Errores encontrados: {len(todos_errores)}")
+        print(f"  - Variables declaradas: {parser.variables_declaradas}")
+        
+    
+        cargar_arbol(ast, todos_errores)
+
+def cargar_arbol(ast: ASTNode, errores: List[Error]):
+    terminalsin.config(state="normal")
+    terminalsin.delete("1.0", tk.END)
+    # Mostrar errores
+    if errores:
+        for i, error in enumerate(errores, 1):
+            tag = error.tipo.name.lower()
+            #borrar el texto anterior
+            terminalsin.config(state="normal")
+            terminalsin.insert(tk.END, f"{i}. {error}\n", tag)
+            terminalsin.config(state="disabled")
+    else:
+        terminalsin.config(state="normal")
+        terminalsin.delete("1.0", tk.END)
+        terminalsin.insert(tk.END, "¡No se encontraron errores! ✓", "success")
+        terminalsin.tag_configure("success", foreground="green")
+        terminalsin.config(state="disabled")
+
+    # Mostrar estadísticas
+    def contar_nodos(nodo):
+        count = {"total": 0, "errores": 0, "por_tipo": {}}
+        
+        def contar_recursivo(n):
+            count["total"] += 1
+            if n.es_error:
+                count["errores"] += 1
+            
+            tipo = n.tipo
+            count["por_tipo"][tipo] = count["por_tipo"].get(tipo, 0) + 1
+            
+            for hijo in n.hijos:
+                contar_recursivo(hijo)
+        
+        contar_recursivo(nodo)
+        return count
+    
+    stats = contar_nodos(ast)
+
+    # Agregar el AST al tree
+    agregar_nodo(terminaltreeSin, '', ast)
+
 def thread_ejecutar():
     """
     Función que simula la ejecución del código ingresado.
@@ -295,30 +374,41 @@ def thread_ejecutar():
         mensaje.set("Ejecutando código...")
         
         DFA.process(contenido)  # Establece el texto en el analizador léxico
-        DFA.genarcherrores("errores.tk")  # Genera el árbol sintáctico
+        DFA.genarcherrores("errores.tk")  # Generar archivo de errores
         DFA.deleteCommentandError()  # Elimina los comentarios del texto
 
         for token in DFA.tokens:
             terminalex.config(state="normal")
-            terminalex.insert(END, f"{token[0]}: {token[1]}\n")
-
+            terminalex.insert(END, f"{token[1]:<20} {token[0]:<18} (línea {token[2]}, columna {token[3]})\n")
 
         # print("\nErrores:")
         # for error in DFA.errors:
         #    print(error)
-        for error in DFA.errors:
+        if DFA.errors:
             terminalerlex.config(state="normal")
-            terminalerlex.insert(END, error + "\n")
+            terminalerlex.insert(END, "Errores encontrados:\n")
+            for error in DFA.errors:
+                terminalerlex.insert(END, f"{error}\n")
+            terminalerlex.config(state="disabled")
+            mensaje.set("Errores encontrados, revisa la terminal de errores.")
+        else:
+            terminalerlex.config(state="normal")
+            terminalerlex.insert(END, "¡No se encontraron errores! ✓\n")
+            terminalerlex.config(state="disabled")
 
          # Si el archivo existe, lo eliminamos
         if os.path.exists("token.tk"):
             print("El archivo ya existe, se eliminará.")
             os.remove("token.tk")
 
-        DFA.genarch("token.tk")  # Genera el árbol sintáctico
+        DFA.genarch("token.tk")  # Genera el archivo de tokens
         
         terminalex.config(state="disabled")  # Deshabilitar la edición
         terminalerlex.config(state="disabled")  # Deshabilitar la edición
+
+        # Preparar el árbol de sintaxis
+        preparar_arbol()
+        
 
 # Función para mostrar la posición del cursor
 def show_cursor_position(event):
@@ -430,7 +520,7 @@ lineas.config(bg="#2d2d2d", fg="#d4d4d4")
 texto = Text(frame, bd=0, padx=6, pady=4, font=("Consolas", 12), undo=True,  wrap="none")
 
 # Colores para el área de texto principal
-texto.config(bg="#1e1e1e", fg="#407a33", insertbackground="#d4d4d4")
+texto.config(bg="#1e1e1e", fg="#d4d4d4", insertbackground="#d4d4d4")
 
 # Añadir el widget de texto al frame
 texto.pack(side="left", fill="both", expand=True)
@@ -462,12 +552,37 @@ terminalex.config(state="disabled")
 notebook_terminal.add(framelexer, text="Terminal Léxica")
 
 # Terminal sintáctica
-frame_terminalsy = Frame(notebook_terminal, bg="#1e1e1e")
-terminalsy = Text(frame_terminalsy, height=5, bg="#1e1e1e", fg="#d4d4d4")
-terminalsy.pack(fill="both", expand=True)
-terminalsy.config(state="disabled")
+frame_terminaltreeSin = Frame(notebook_terminal, bg="#1e1e1e")
+terminaltreeSin = ttk.Treeview(frame_terminaltreeSin, columns=("Valor", "Línea", "Columna"), show="tree headings")
 
-notebook_terminal.add(frame_terminalsy, text="Terminal Sintáctica")
+# Configurar colores para errores
+terminaltreeSin.tag_configure("error", foreground="red")
+
+# Encabezados
+terminaltreeSin.heading("#0", text="Nodo")
+terminaltreeSin.heading("Valor", text="Valor")
+terminaltreeSin.heading("Línea", text="Línea")
+terminaltreeSin.heading("Columna", text="Columna")
+    
+# Ajustes de columnas
+terminaltreeSin.column("#0", width=200, anchor="w")
+terminaltreeSin.column("Valor", width=200, anchor="w")
+terminaltreeSin.column("Línea", width=60, anchor="center")
+terminaltreeSin.column("Columna", width=70, anchor="center")
+
+# Scrollbar para el tree
+scrollbar_tree = ttk.Scrollbar(frame_terminaltreeSin, orient="vertical", command=terminaltreeSin.yview)
+terminaltreeSin.configure(yscrollcommand=scrollbar_tree.set)
+
+terminaltreeSin.grid(row=0, column=0, sticky="nsew")
+scrollbar_tree.grid(row=0, column=1, sticky="ns")
+    
+frame_terminaltreeSin.grid_rowconfigure(0, weight=1)
+frame_terminaltreeSin.grid_columnconfigure(0, weight=1)
+
+
+
+notebook_terminal.add(frame_terminaltreeSin, text="Terminal Sintáctica")
 
 # Terminal semántica
 frame_terminalse = Frame(notebook_terminal, bg="#1e1e1e")
