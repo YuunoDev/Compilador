@@ -7,7 +7,7 @@ import threading
 import re
 from tkinter import messagebox
 from Lex.Anlex import *
-from Lex.AnSin import *
+from Sin.AnSin import *
 import json
 import os
 

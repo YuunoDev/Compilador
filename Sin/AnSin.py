@@ -276,8 +276,8 @@ class Parser:
                     return self.parse_print()
                 elif tok.lexema in ["int", "float", "char", "string", "bool"]:
                     nodo = self.parse_declaracion()
-                    if nodo:
-                        self.validar_semantica(nodo)
+                    # if nodo:
+                    #     self.validar_semantica(nodo)
                     return nodo
                 elif tok.lexema == "if":
                     return self.parse_if()
@@ -297,8 +297,8 @@ class Parser:
                     return self.parse_incremento()
                 else:
                     nodo = self.parse_asignacion()
-                    if nodo:
-                        self.validar_semantica(nodo)
+                    # if nodo:
+                    #     self.validar_semantica(nodo)
                     return nodo
                     
             else:
@@ -561,11 +561,20 @@ class Parser:
                     ident.linea,
                     ident.columna
                 ))
-            
-            nodo = ASTNode("Incremento" if op.lexema == "++" else "Decremento", 
+
+            nodo = ASTNode("Incremento ++" if op.lexema == "++" else "Decremento --", 
                           linea=ident.linea, columna=ident.columna)
-            nodo.agregar_hijo(ASTNode("ID", ident.lexema, linea=ident.linea, columna=ident.columna))
-            
+            #nodo asignación
+            nodo_asig = ASTNode("Asignacion", " ", linea=ident.linea, columna=ident.columna)
+            nodo_asig.agregar_hijo(ASTNode("ID", ident.lexema, linea=ident.linea, columna=ident.columna))
+            nodo.agregar_hijo(nodo_asig)
+
+            # agregar operador
+            nodoop = ASTNode("Operacion", "+" if op.lexema == "++" else "-", linea=ident.linea, columna=ident.columna)
+            nodo_asig.agregar_hijo(nodoop)
+            nodoop.agregar_hijo(ASTNode("valor", ident.lexema, linea=ident.linea, columna=ident.columna))
+            nodoop.agregar_hijo(ASTNode("valor", "1", linea=op.linea, columna=op.columna))
+
             return nodo
             
         except Exception as e:
