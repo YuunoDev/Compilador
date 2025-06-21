@@ -274,6 +274,14 @@ def ejecutar_codigo():
     ejecutar = threading.Thread(target=thread_ejecutar)
     ejecutar.start()
 
+def archivo_erroresSintacticos(errores):
+    """
+    Guarda los errores sintácticos en un archivo.
+    """
+    with open("errores_sintacticos.tk", "w", encoding="utf-8") as f:
+        for error in errores:
+            f.write(f"{error}\n")
+    mensaje.set("Errores sintácticos guardados en 'errores_sintacticos.txt'")
 
 def preparar_arbol():
     #lipiar arbol
@@ -306,8 +314,9 @@ def preparar_arbol():
         print(f"  - Errores encontrados: {len(todos_errores)}")
         print(f"  - Variables declaradas: {parser.variables_declaradas}")
         
-    
+        archivo_erroresSintacticos(todos_errores)  # Guardar errores sintácticos en un archivo
         cargar_arbol(ast, todos_errores)
+
 
 def cargar_arbol(ast: ASTNode, errores: List[Error]):
     terminalsin.config(state="normal")
