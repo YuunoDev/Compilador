@@ -10,11 +10,10 @@ from Lex.Anlex import *
 from Sin.AnSin import *
 import json
 import os
+from Fileamd.File import *
 
-
-ruta = ""
-# Colores para los tokens
-edit=False  # Bandera para saber si se ha editado el texto
+# Clase para archivo
+FILER = Fileamin()
 #Clase de Lexico
 DFA = Automata()
 DFAC = Automata()
@@ -23,9 +22,7 @@ DFAC = Automata()
 #nuevo archivo
 def nuevo():
     """Crea un nuevo archivo."""
-    global ruta, edit
-
-    if(edit):
+    if(FILER.edit):
         if messagebox.askyesno("Nuevo archivo", "¿Desea guardar los cambios antes de crear un nuevo archivo?"):
             guardar()
             nuevo_arc()
@@ -36,14 +33,12 @@ def nuevo():
     
 #ajustes para el nuevou archivo
 def nuevo_arc():
-    global ruta, edit
     mensaje.set("Nuevo fichero")
-    ruta = ""
+    FILER.Dfile()
     texto.delete("1.0", END)
     actualizar_numeros_linea()
     root.title("IDE PyC")
-    edit = False
-
+    FILER.setEdit(False)
 
 def abrir():
     """Función para abrir un archivo sin trabar la interfaz gráfica."""
@@ -53,7 +48,6 @@ def abrir():
 
 def open_thread():
     """Maneja la apertura del archivo en un hilo secundario."""
-    global ruta
     ruta_temp = FileDialog.askopenfilename(
         initialdir=".",
         filetypes=[("Ficheros de texto", "*.txt")],
@@ -61,8 +55,8 @@ def open_thread():
     )
 
     if ruta_temp:
-        ruta = ruta_temp
-        leer_archivo(ruta)
+        FILER.setRuta(ruta_temp)
+        leer_archivo(FILER.getRuta())
 
 def leer_archivo(ruta):
     "Lee el contenido de un archivo y lo muestra en la interfaz."""
@@ -79,8 +73,7 @@ def leer_archivo(ruta):
         mensaje.set("Archivo cargado correctamente")
         # Colorear el texto cargado
         debounce_colorText()
-        global edit
-        edit = False
+        FILER.setEdit(False)
 
     except Exception as e:
         mensaje.set("Error al abrir el fichero")
@@ -88,14 +81,13 @@ def leer_archivo(ruta):
 
 def guardar():
     """Guarda el archivo en la ruta actual o pide guardarlo si no tiene ruta."""
-    global edit
-    if ruta:
+    if FILER.getEdit():
         contenido = texto.get("1.0", "end-1c")
         try:
-            with open(ruta, "w", encoding="utf-8") as fichero:
+            with open(FILER.getRuta(), "w", encoding="utf-8") as fichero:
                 fichero.write(contenido)
             mensaje.set("Fichero guardado correctamente")
-            edit = False
+            FILER.setEdit(False)
         except Exception as e:
             mensaje.set("Error al guardar el fichero")
             messagebox.showerror("Error", f"No se pudo guardar el archivo:\n{e}")
@@ -104,7 +96,6 @@ def guardar():
 
 def guardar_como():
     """Guarda el archivo con un nuevo nombre."""
-    global ruta, edit
     mensaje.set("Guardar fichero como")
     ruta_temp = FileDialog.asksaveasfilename(
         title="Guardar fichero",
@@ -113,13 +104,13 @@ def guardar_como():
     )
 
     if ruta_temp:
-        ruta = ruta_temp
+        FILER.setRuta(ruta_temp)
         contenido = texto.get("1.0", "end-1c")
         try:
-            with open(ruta, "w", encoding="utf-8") as f:
+            with open(FILER.getRuta(), "w", encoding="utf-8") as f:
                 f.write(contenido)
             mensaje.set("Fichero guardado correctamente")
-            edit = False
+            FILER.setEdit(False)
         except Exception as e:
             mensaje.set("Error al guardar el fichero")
             messagebox.showerror("Error", f"No se pudo guardar el archivo:\n{e}")
@@ -129,8 +120,7 @@ def guardar_como():
 
 def exit():
     """Cierra la aplicación, preguntando si se deben guardar cambios."""
-    global edit
-    if edit:
+    if FILER.getEdit():
         if messagebox.askyesno("Salir", "¿Desea guardar los cambios antes de salir?"):
             guardar()
     root.quit()
@@ -161,8 +151,7 @@ def on_text_change(event):
     Se actualizan los números de línea y se restablece la bandera 'modified'.
     """
     actualizar_numeros_linea()
-    global edit
-    edit=True
+    FILER.setEdit(True)
 
     texto.edit_modified(False)  # Restablecer la bandera de modificación
 
