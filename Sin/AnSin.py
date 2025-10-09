@@ -10,8 +10,6 @@ Token = namedtuple("Token", ["tipo", "lexema", "linea", "columna"])
 
 class ErrorTipo(Enum):
     SINTACTICO = "Error Sintáctico"
-    SEMANTICO = "Error Semántico"
-    LEXICO = "Error Léxico"
     RECUPERACION = "Recuperación"
 
 class Error:
@@ -62,14 +60,21 @@ class ASTNode:
         self.valor = valor
         self.linea = linea
         self.columna = columna
-        self.hijos = []
+        self.hijos :ASTNode = []
         self.es_error = False
-
+        self.tipo_dato = None  # Para almacenar el tipo de dato inferido
+        self.scope = None  # Para almacenar el scope donde se define
+        self.use = False
+    
     def agregar_hijo(self, hijo):
-        self.hijos.append(hijo)
-        
+        if hijo:
+            self.hijos.append(hijo)
+    
     def marcar_error(self):
         self.es_error = True
+    
+    def __repr__(self):
+        return f"ASTNode(nom:{self.tipo}, val:{self.valor}, linea:{self.linea})"
 
 class Parser:
     def __init__(self, tokens: List[Token]):
@@ -346,8 +351,10 @@ class Parser:
                 if ident:
                     variables.append(ident.lexema)
             
-            nodo = ASTNode("Declaracion", f"{tipo.lexema} {', '.join(variables)}",
+            nodo = ASTNode("Declaracion", f"{tipo.lexema}",
                           linea=tipo.linea, columna=tipo.columna)
+            nodo.agregar_hijo(ASTNode("ID", f"{', '.join(variables)}",
+                          linea=tipo.linea, columna=tipo.columna))
 
             # Verificar si hay asignación inicial (solo para una variable)
             if len(variables) == 1 and self.actual() and self.actual().tipo == "ASIGNACION":
@@ -778,10 +785,24 @@ class Parser:
             return expr
         
         # Números, identificadores, booleanos
-        elif tok.tipo in ["NUMERO ENTERO", "NUMERO REAL", "IDENTIFICADOR", "BOOLEANO"]:
+        #elif tok.tipo in ["NUMERO ENTERO", "NUMERO REAL", "IDENTIFICADOR", "BOOLEANO"]:
+        elif tok.tipo == "NUMERO ENTERO":
             token = self.consumir()
-            return ASTNode("Valor", token.lexema, linea=token.linea, columna=token.columna)
+            return ASTNode("entero", token.lexema, linea=token.linea, columna=token.columna)   
         
+        elif tok.tipo == "NUMERO REAL":
+            token = self.consumir()
+            return ASTNode("flotante", token.lexema, linea=token.linea, columna=token.columna)
+
+        elif tok.tipo == "IDENTIFICADOR":
+            token = self.consumir()
+            return ASTNode("identificador", token.lexema, linea=token.linea, columna=token.columna)
+
+        elif tok.tipo == "BOOLEANO":
+            token = self.consumir()
+            return ASTNode("booleano", token.lexema, linea=token.linea, columna=token.columna)
+
+
         else:
             # Token no reconocido en expresión
             self.errores.append(Error(
@@ -846,6 +867,8 @@ def agregar_nodo(tree, parent_id, nodo):
         linea = getattr(nodo, "linea", "")
         columna = getattr(nodo, "columna", "")
         valor = nodo.valor if nodo.valor else ""
+
+        print(nodo.__repr__())
         
         node_id = tree.insert(
             parent_id, "end", text=texto,
@@ -859,7 +882,6 @@ def agregar_nodo(tree, parent_id, nodo):
 
 def mostrar_ast_y_errores(ast: ASTNode, errores: List[Error]):
     
-
     root = tk.Tk()
     root.title("Analizador Sintáctico con Recuperación de Errores - Versión Extendida")
     root.geometry("1200x800")
@@ -930,7 +952,7 @@ def mostrar_ast_y_errores(ast: ASTNode, errores: List[Error]):
         texto_errores.tag_configure("success", foreground="green")
     
     # Mostrar estadísticas
-    def contar_nodos(nodo):
+    def contar_nodos(nodo: ASTNode):
         count = {"total": 0, "errores": 0, "por_tipo": {}}
         
         def contar_recursivo(n):
@@ -970,6 +992,8 @@ def mostrar_ast_y_errores(ast: ASTNode, errores: List[Error]):
     
     # Agregar el AST al tree
     agregar_nodo(tree, '', ast)
+
+
     
     # Estadísticas en la barra de estado
     frame_estado = ttk.Frame(root)
@@ -1033,6 +1057,7 @@ def programain():
         # Mostrar interfaz gráfica
         mostrar_ast_y_errores(ast, todos_errores)
 
+    
 
 if __name__ == "__main__":
     programain()

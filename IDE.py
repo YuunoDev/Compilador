@@ -8,6 +8,7 @@ import re
 from tkinter import messagebox
 from Lex.Anlex import *
 from Sin.AnSin import *
+from Sem.AnSem import *
 import json
 import os
 from Fileamd.File import *
@@ -17,6 +18,29 @@ FILER = Fileamin()
 #Clase de Lexico
 DFA = Automata()
 DFAC = Automata()
+# Clase de sematico
+SEM= SemAnalyzer()
+
+#colores
+# Definir colores para cada tipo de token
+COLORES = {
+        "COMENTARIO": "#407a33",      # Gris azulado apagado, sutil pero visible
+        "IDENTIFICADOR": "#C678DD",   # Lavanda suave, usado para variables
+        "RESERVADA": "#61AFEF",        # Azul fuerte, común en palabras clave
+        "OTRO": "#ABB2BF",            # Gris claro, para texto neutro o no categorizado
+        "OPERADOR": "#56B6C2",        # Azul verdoso, bien contrastado
+        "NUMERO ENTERO": "#D19A66",          # Naranja suave, típico para números
+        "ASIGNACION": "#E5C07B",      # Amarillo dorado, resalta sin molestar
+        "CADENA": "#98C379",          # Verde claro, ideal para cadenas
+        "COMPARACION": "#56B6C2",     # Igual que operador para coherencia
+        "SIMBOLO": "#61AFEF",         # Azul claro, resalta bien en fondos oscuros
+        "LOGICO": "#BE5046",          # Rojo ladrillo, da contraste a los operadores lógicos
+        "ERRORES": "#FF0000",          # Rojo brillante, para errores
+        "NUMERO REAL": "#D19A66",     # Naranja suave, para números reales
+        "DESCONOCIDO": "#d4d4d4",   # Rojo brillante, para errores
+        "CADENA": "#98C379",          # Verde claro, ideal para cadenas
+        "OPERATORIO": "#56B6C2",        # << y >> para entrada/salida
+    }
 
 # Funciones para el menú
 #nuevo archivo
@@ -117,14 +141,12 @@ def guardar_como():
     else:
         mensaje.set("Guardado cancelado")
 
-
 def exit():
     """Cierra la aplicación, preguntando si se deben guardar cambios."""
     if FILER.getEdit():
         if messagebox.askyesno("Salir", "¿Desea guardar los cambios antes de salir?"):
             guardar()
     root.quit()
-
 
 # Función para actualizar los números de línea
 def actualizar_numeros_linea(event=None):
@@ -173,30 +195,10 @@ def colorText():
 
     texto.config(state="disabled")
 
-    # Definir colores para cada tipo de token
-    colores = {
-        "COMENTARIO": "#407a33",      # Gris azulado apagado, sutil pero visible
-        "IDENTIFICADOR": "#C678DD",   # Lavanda suave, usado para variables
-        "RESERVADA": "#61AFEF",        # Azul fuerte, común en palabras clave
-        "OTRO": "#ABB2BF",            # Gris claro, para texto neutro o no categorizado
-        "OPERADOR": "#56B6C2",        # Azul verdoso, bien contrastado
-        "NUMERO ENTERO": "#D19A66",          # Naranja suave, típico para números
-        "ASIGNACION": "#E5C07B",      # Amarillo dorado, resalta sin molestar
-        "CADENA": "#98C379",          # Verde claro, ideal para cadenas
-        "COMPARACION": "#56B6C2",     # Igual que operador para coherencia
-        "SIMBOLO": "#61AFEF",         # Azul claro, resalta bien en fondos oscuros
-        "LOGICO": "#BE5046",          # Rojo ladrillo, da contraste a los operadores lógicos
-        "ERRORES": "#FF0000",          # Rojo brillante, para errores
-        "NUMERO REAL": "#D19A66",     # Naranja suave, para números reales
-        "DESCONOCIDO": "#d4d4d4",   # Rojo brillante, para errores
-        "CADENA": "#98C379",          # Verde claro, ideal para cadenas
-        "OPERATORIO": "#56B6C2",        # << y >> para entrada/salida
-    }
-
     texto.tag_delete(*texto.tag_names())  # Elimina todos los tags
 
     # Crear tags para cada tipo de token
-    for tipo, color in colores.items():
+    for tipo, color in COLORES.items():
         texto.tag_configure(tipo, foreground=color)
     
     # Colorear tokens en el texto
@@ -248,7 +250,6 @@ def colorText():
     # Hacer que el texto sea editable nuevamente
     texto.config(state="normal")
     
-
 # Función para evitar llamadas repetidas a la función de resaltado
 def debounce_colorText():
     if hasattr(debounce_colorText, "after_id"):
@@ -270,42 +271,7 @@ def archivo_erroresSintacticos(errores):
     with open("errores_sintacticos.tk", "w", encoding="utf-8") as f:
         for error in errores:
             f.write(f"{error}\n")
-    mensaje.set("Errores sintácticos guardados en 'errores_sintacticos.txt'")
-
-def preparar_arbol():
-    #lipiar arbol
-    terminaltreeSin.delete(*terminaltreeSin.get_children())  # Limpiar el árbol
-   
-
-    tokens, errores_lexicos = cargar_tokens_desde_archivo("token.tk")
-
-    if errores_lexicos:
-        print("Errores encontrados al cargar tokens:")
-        for error in errores_lexicos:
-            print(f"  {error}")
-
-    if not tokens:
-        print("No se encontraron tokens válidos en el archivo.")
-        # Mostrar solo los errores léxicos si no hay tokens
-        cargar_arbol(ASTNode("Programa_Vacío"), errores_lexicos)
-    else:
-        print(f"Se cargaron {len(tokens)} tokens exitosamente.")
-        
-        # Crear parser y analizar
-        parser = Parser(tokens)
-        ast = parser.parse()
-        
-        # Combinar errores léxicos y de parsing
-        todos_errores = errores_lexicos + parser.errores
-    
-        # Mostrar resultados
-        print(f"\nAnálisis completado:")
-        print(f"  - Errores encontrados: {len(todos_errores)}")
-        print(f"  - Variables declaradas: {parser.variables_declaradas}")
-        
-        archivo_erroresSintacticos(todos_errores)  # Guardar errores sintácticos en un archivo
-        cargar_arbol(ast, todos_errores)
-
+    mensaje.set("Errores sintácticos guardados en 'errores_sintacticos.tk'")
 
 def cargar_arbol(ast: ASTNode, errores: List[Error]):
     terminalsin.config(state="normal")
@@ -347,6 +313,60 @@ def cargar_arbol(ast: ASTNode, errores: List[Error]):
 
     # Agregar el AST al tree
     agregar_nodo(terminaltreeSin, '', ast)
+
+def preparar_arbol():
+    #lipiar arbol
+    terminaltreeSin.delete(*terminaltreeSin.get_children())  # Limpiar el árbol
+   
+    tokens, errores_lexicos = cargar_tokens_desde_archivo("token.tk")
+
+    if errores_lexicos:
+        print("Errores encontrados al cargar tokens:")
+        for error in errores_lexicos:
+            print(f"  {error}")
+
+    if not tokens:
+        print("No se encontraron tokens válidos en el archivo.")
+        # Mostrar solo los errores léxicos si no hay tokens
+        cargar_arbol(ASTNode("Programa_Vacío"), errores_lexicos)
+    else:
+        print(f"Se cargaron {len(tokens)} tokens exitosamente.")
+        
+        # Crear parser y analizar
+        parser = Parser(tokens)
+        ast = parser.parse()
+        
+        # Combinar errores léxicos y de parsing
+        todos_errores = errores_lexicos + parser.errores
+    
+        # Mostrar resultados
+        print(f"\nAnálisis completado:")
+        print(f"  - Errores encontrados: {len(todos_errores)}")
+        print(f"  - Variables declaradas: {parser.variables_declaradas}")
+        
+        archivo_erroresSintacticos(todos_errores)  # Guardar errores sintácticos en un archivo
+        cargar_arbol(ast, todos_errores)
+
+        ejecución_sem(ast)
+        
+
+def ejecución_sem(ast: ASTNode):
+    print("analisis sem")
+    SEM.analizar(ast)
+    #Tablas
+    terminalse.config(state="normal")
+    terminalse.delete("1.0", tk.END)
+    terminalse.config(state="normal")
+    terminalse.insert(tk.END, SEM.symbol_table.display_r())
+    terminalse.config(state="disabled")
+
+    #errores
+    terminalsem.config(state="normal")
+    terminalsem.delete("1.0", tk.END)
+    terminalsem.config(state="normal")
+    terminalsem.insert(tk.END, SEM.report_errors_r())
+    terminalsem.config(state="disabled")   
+
 
 def thread_ejecutar():
     """

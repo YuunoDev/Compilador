@@ -177,7 +177,7 @@ class Automata:
                     self.state = 18
                     self.andChar(char)
                 else:
-                    if char not in [" ", "\n", "\0"]:
+                    if char not in [" ", "\n", "\0", "\t"]:
                         self.andChar(char)
                         self.error(1)
                         self.state = 16
