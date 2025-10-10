@@ -13,7 +13,7 @@ class Automata:
         self.position = 0
         self.line = 1
         self.column = 0
-        self.reserved = ["print","if", "else", "while", "end", "do", "switch","case", "int", "float","main", "cin", "cout", "char", "string", "bool", "True", "False", "return", "void", "break", "continue", "for", "foreach", "new", "delete", "this", "class", "public", "private", "protected", "static", "until"]
+        self.reserved = ["print","if", "else", "while", "end", "do", "int", "float","main", "cin", "cout", "string", "bool", "True", "False","true","false", "return", "void", "break", "continue", "for", "foreach","delete", "this"]
         self.errors = []
         self.columncomment = 0
         self.linecomment = 0
@@ -66,7 +66,9 @@ class Automata:
     # funcion para obtener el tipo de palabra reservada
     def reservedWords(self, word):
         #si la palarabra reservada es igual a la palabra reservada retornar la palabra reservada
-        if word in self.reserved:
+        if word in ["true","false","True","False"]:
+            return "BOOLEANO"
+        elif word in self.reserved:
             return "RESERVADA" #Si se requiere directamente la palabra solo cambiar a "WORD"
         else:
             return "IDENTIFICADOR" #si no es una palabra reservada retornar ID
@@ -449,7 +451,7 @@ class Automata:
 # DFA = Automata()
 
 # #lectura de archivo
-# with open("provS.txt", "r", encoding="utf-8", errors="ignore") as file:
+# with open("provS2.txt", "r", encoding="utf-8", errors="ignore") as file:
 #    code = file.read()
 
 # DFA.process(code)

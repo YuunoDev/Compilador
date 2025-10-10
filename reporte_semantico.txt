@@ -1,0 +1,23 @@
+============================================================
+REPORTE DE ANÁLISIS SEMÁNTICO
+============================================================
+
+ERRORES ENCONTRADOS: 1
+------------------------------------------------------------
+[ERROR] Línea 6, Columna 1: No se puede asignar 'string' a variable de tipo 'int'
+
+ADVERTENCIAS: 3
+------------------------------------------------------------
+[WARNING] Línea 2, Columna 6: Variable 'y' declarada pero no usada
+[WARNING] Línea 4, Columna 5: Variable 'z' declarada pero no usada
+[WARNING] Línea 5, Columna 6: Variable 'w' declarada pero no usada
+
+TABLA DE SÍMBOLOS
+------------------------------------------------------------
+Scope nivel 0:
+  x: int (inicializado, ✓ usado) - Línea 1
+  y: bool (inicializado, ✗ no usado) - Línea 2
+  z: int (inicializado, ✗ no usado) - Línea 4
+  w: bool (sin inicializar, ✗ no usado) - Línea 5
+
+============================================================

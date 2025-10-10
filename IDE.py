@@ -27,7 +27,6 @@ COLORES = {
         "COMENTARIO": "#407a33",      # Gris azulado apagado, sutil pero visible
         "IDENTIFICADOR": "#C678DD",   # Lavanda suave, usado para variables
         "RESERVADA": "#61AFEF",        # Azul fuerte, común en palabras clave
-        "OTRO": "#ABB2BF",            # Gris claro, para texto neutro o no categorizado
         "OPERADOR": "#56B6C2",        # Azul verdoso, bien contrastado
         "NUMERO ENTERO": "#D19A66",          # Naranja suave, típico para números
         "ASIGNACION": "#E5C07B",      # Amarillo dorado, resalta sin molestar
@@ -40,6 +39,8 @@ COLORES = {
         "DESCONOCIDO": "#d4d4d4",   # Rojo brillante, para errores
         "CADENA": "#98C379",          # Verde claro, ideal para cadenas
         "OPERATORIO": "#56B6C2",        # << y >> para entrada/salida
+        "BOOlEANO":"#61AFEF",
+        "OTRO": "#ABB2BF",            # Gris claro, para texto neutro o no categorizado
     }
 
 # Funciones para el menú
@@ -330,7 +331,7 @@ def preparar_arbol():
         # Mostrar solo los errores léxicos si no hay tokens
         cargar_arbol(ASTNode("Programa_Vacío"), errores_lexicos)
     else:
-        print(f"Se cargaron {len(tokens)} tokens exitosamente.")
+        # print(f"Se cargaron {len(tokens)} tokens exitosamente.")
         
         # Crear parser y analizar
         parser = Parser(tokens)
@@ -340,9 +341,9 @@ def preparar_arbol():
         todos_errores = errores_lexicos + parser.errores
     
         # Mostrar resultados
-        print(f"\nAnálisis completado:")
-        print(f"  - Errores encontrados: {len(todos_errores)}")
-        print(f"  - Variables declaradas: {parser.variables_declaradas}")
+        # print(f"\nAnálisis completado:")
+        # print(f"  - Errores encontrados: {len(todos_errores)}")
+        # print(f"  - Variables declaradas: {parser.variables_declaradas}")
         
         archivo_erroresSintacticos(todos_errores)  # Guardar errores sintácticos en un archivo
         cargar_arbol(ast, todos_errores)
@@ -351,7 +352,7 @@ def preparar_arbol():
         
 
 def ejecución_sem(ast: ASTNode):
-    print("analisis sem")
+    #print("analisis sem")
     SEM.analizar(ast)
     #Tablas
     terminalse.config(state="normal")
@@ -382,6 +383,18 @@ def thread_ejecutar():
         terminalex.delete("1.0", END)
         terminalerlex.config(state="normal")
         terminalerlex.delete("1.0", END)
+        
+        terminalsin.config(state="normal")
+        terminalsin.delete("1.0", END)
+
+        SEM.erase()
+
+        terminalse.config(state="normal")
+        terminalse.delete("1.0", END)
+        terminalsem.config(state="normal")
+        terminalsem.delete("1.0", END)
+
+
 
         # Terminal de ejecución
         terminalej.config(state="normal")
@@ -416,7 +429,7 @@ def thread_ejecutar():
 
          # Si el archivo existe, lo eliminamos
         if os.path.exists("token.tk"):
-            print("El archivo ya existe, se eliminará.")
+            #print("El archivo ya existe, se eliminará.")
             os.remove("token.tk")
 
         DFA.genarch("token.tk")  # Genera el archivo de tokens

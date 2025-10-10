@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 import enum
 from typing import Any,Optional
 
+
 class ASTNode:
     def __init__(self, tipo, valor=None, linea=None, columna=None):
         self.tipo = tipo
@@ -32,16 +33,17 @@ class DataType(enum.Enum):
     ERROR = "error"
 
 #sacar tipo de operacion
-def tipo_op(nodo:ASTNode)-> str:
-        
-        if nodo.valor == "+":
-            return "suma"
-        elif nodo.valor == "-":
-            return "resta"
-        elif nodo.valor == "*":
-            return "multiplicacion"
-        elif nodo.valor == "/":
-            return "division"
+def tipo_op(op):
+    if op == "+":
+        return "suma"
+    elif op == "-":
+        return "resta"
+    elif op == "*":
+        return "multiplicacion"
+    elif op == "/":
+        return "division"
+    else:
+        return "desconocido"
             
 
 # Clase para representar un símbolo en la tabla
@@ -62,6 +64,10 @@ class SymbolTable:
     def __init__(self):
         self.scopes = [{}] #pila
         self.current_scope = "global"
+
+    def erase(self):
+        """Elimina todos los simbolos excepto el global"""
+        self.scopes = [{}]
 
     def insert(self, symbol: Symbol)-> bool:
         """Inserta en tabla """
@@ -90,7 +96,9 @@ class SymbolTable:
         """Actualiza las líneas de un símbolo existente"""
         symbol = self.lookup(name)
         if symbol:
-            symbol.lines.append(line)
+            # si existe la linea no agregarla
+            if line not in symbol.lines:
+                symbol.lines.append(line)
             return True
         return False
     
@@ -137,11 +145,17 @@ class SemAnalyzer:
         self.errors = []
         self.warnings = []
 
+    def erase(self):
+        """Elimina todos los simbolos excepto el global"""
+        self.symbol_table.erase()
+        self.errors = []
+        self.warnings = []
+
     def analizar(self, nodo: ASTNode):
         """Analiza el AST recursivamente"""
         if nodo is None:
             return
-        
+        #print(f"Analizando nodo: {nodo.tipo} con valor: {nodo.valor} en línea {nodo.linea}")
         metodo = f"analizar_{str.lower(nodo.tipo)}"
         if hasattr(self, metodo):
             getattr(self, metodo)(nodo)
@@ -153,7 +167,7 @@ class SemAnalyzer:
     def analizar_programa(self, nodo: ASTNode):
         for hijo in nodo.hijos:
             self.analizar(hijo)
-        self.symbol_table.display()
+        #self.symbol_table.display()
 
     def analizar_declaracion(self, nodo: ASTNode):
         tipo = nodo.valor  # Tipo de dato
@@ -174,19 +188,20 @@ class SemAnalyzer:
                 self.symbol_table.insert(symbol)
 
                 if len(nodo.hijos) > 1:  # Si hay una inicialización
-                    valor_nodo = nodo.hijos[1]
+                    # sigue una Asignación
+                    self.analizar(nodo.hijos[1])
+                    valor_nodo = nodo.hijos[1].hijos[1]
                     valor = self.evaluar_expresion(valor_nodo)
                     if valor is not None:
                         symbol.value = valor
                         symbol.is_initialized = True
                         valor_nodo.use = True
                         if not self.check_tipo_compatibility(data_type, valor_nodo.tipo_dato):
-                            self.errors.append(f"Error semántico: Incompatibilidad de tipos en la inicialización de '{identificador}'. Línea {linea}")
+                            self.errors.append(f"Error semántico: Incompatibilidad de tipos en la inicialización de '{var}'. Línea {linea}")
                             nodo.marcar_error()
                         else:
                             nodo.tipo_dato = data_type
-                    else:
-                        nodo.marcar_error()
+                    
                 else:
                     nodo.tipo_dato = data_type
         else:
@@ -200,19 +215,19 @@ class SemAnalyzer:
             self.symbol_table.insert(symbol)
 
             if len(nodo.hijos) > 1:  # Si hay una inicialización
-                valor_nodo = nodo.hijos[1]
+                # sigue una Asignación
+                self.analizar(nodo.hijos[1])
+                valor_nodo = nodo.hijos[1].hijos[1]
                 valor = self.evaluar_expresion(valor_nodo)
                 if valor is not None:
                     symbol.value = valor
                     symbol.is_initialized = True
                     valor_nodo.use = True
                     if not self.check_tipo_compatibility(data_type, valor_nodo.tipo_dato):
-                        self.errors.append(f"Error semántico: Incompatibilidad de tipos en la inicialización de '{identificador}'. Línea {linea}")
+                        self.errors.append(f"Error semántico: Incompatibilidad de tipos en la inicialización de '{var}'. Línea {linea}")
                         nodo.marcar_error()
                     else:
                         nodo.tipo_dato = data_type
-                else:
-                    nodo.marcar_error()
             else:
                 nodo.tipo_dato = data_type
 
@@ -251,7 +266,10 @@ class SemAnalyzer:
                     valor_nodo.use = True
                     nodo.tipo_dato = symbol.data_type
                 else:
-                    self.symbol_table.update(identificador, valor)
+                    if symbol.data_type == DataType.INT:
+                        self.symbol_table.update(identificador, int(valor))
+                    else:
+                        self.symbol_table.update(identificador, valor)
                     self.symbol_table.update_lines(identificador, linea)
                     valor_nodo.use = True
                     nodo.tipo_dato = symbol.data_type
@@ -261,7 +279,6 @@ class SemAnalyzer:
         nodo.scope = symbol.scope
         nodo.use = True
         self.analizar(valor_nodo)
-
     
     def analizar_expresion(self, nodo: ASTNode):
         if nodo.tipo == "entero":
@@ -289,7 +306,7 @@ class SemAnalyzer:
             self.symbol_table.update_lines_r(symbol,nodo.linea)
             symbol.use = True
             return symbol.value
-        elif nodo.tipo is "Operacion":
+        elif nodo.tipo in ["Operacion","operacion"]:
             left_nodo = nodo.hijos[0]
             right_nodo = nodo.hijos[1]
             left_val = self.evaluar_expresion(left_nodo)
@@ -306,6 +323,11 @@ class SemAnalyzer:
             tipo=tipo_op(nodo.valor)
 
             if left_nodo.tipo_dato == DataType.INT and right_nodo.tipo_dato == DataType.INT:
+                if isinstance(left_val,str):
+                    left_val=float(left_val) if '.' in left_val else int(left_val)
+                if isinstance(right_val,str):
+                    right_val=float(right_val) if '.' in right_val else int(right_val)
+
                 if tipo == "suma":
                     resultado = left_val + right_val
                 elif tipo == "resta":
@@ -317,7 +339,9 @@ class SemAnalyzer:
                         self.errors.append(f"Error semántico: División por cero. Línea {nodo.linea}")
                         nodo.marcar_error()
                         return None
+                    # si se detectan los valores como str cambiarlos a tipo que son
                     resultado = left_val / right_val
+                        
                 nodo.tipo_dato = DataType.INT
                 return resultado
             elif (left_nodo.tipo_dato == DataType.INT and right_nodo.tipo_dato == DataType.FLOAT) or \
@@ -350,6 +374,57 @@ class SemAnalyzer:
             nodo.marcar_error()
             return None
         
+    def analizar_incremento(self,nodo: ASTNode):
+        identificador = nodo.hijos[0].hijos[0].valor
+        linea = nodo.linea
+        
+        symbol = self.symbol_table.lookup(identificador)
+        if not symbol:
+            self.errors.append(f"Error semántico: La variable '{identificador}' no está declarada. Línea {linea}")
+            nodo.marcar_error()
+            return
+        
+        if symbol.data_type not in [DataType.INT, DataType.FLOAT]:
+            self.errors.append(f"Error semántico: La variable '{identificador}' no es de tipo numérico. Línea {linea}")
+            self.symbol_table.update_lines(identificador, linea)
+            nodo.marcar_error()
+            return
+        
+        if not symbol.is_initialized:
+            self.warnings.append(f"Advertencia semántica: La variable '{identificador}' no está inicializada. Línea {linea}")
+            self.symbol_table.update_lines(identificador, linea)
+            nodo.marcar_warning()
+            return
+        
+        #analizar la ir a asignacion
+        self.analizar(nodo.hijos[0])
+
+    
+    def analizar_decremento(self,nodo: ASTNode):
+        identificador = nodo.hijos[0].valor
+        linea = nodo.linea
+        
+        symbol = self.symbol_table.lookup(identificador)
+        if not symbol:
+            self.errors.append(f"Error semántico: La variable '{identificador}' no está declarada. Línea {linea}")
+            nodo.marcar_error()
+            return
+        
+        if symbol.data_type not in [DataType.INT, DataType.FLOAT]:
+            self.errors.append(f"Error semántico: La variable '{identificador}' no es de tipo numérico. Línea {linea}")
+            self.symbol_table.update_lines(identificador, linea)
+            nodo.marcar_error()
+            return
+        
+        if not symbol.is_initialized:
+            self.warnings.append(f"Advertencia semántica: La variable '{identificador}' no está inicializada. Línea {linea}")
+            self.symbol_table.update_lines(identificador, linea)
+            nodo.marcar_warning()
+            return
+        
+        #analizar la ir a asignacion
+        self.analizar(nodo.hijos[0])
+
     def evaluar_expresion(self, nodo: ASTNode):
         return self.analizar_expresion(nodo)
     
@@ -393,38 +468,72 @@ if __name__ == "__main__":
     # Construcción de un AST de ejemplo
     programa = ASTNode("programa")
     
-    decl1 = ASTNode("declaracion", linea=1, valor="int")
+    decl1 = ASTNode("declaracion", linea=1, valor="bool")
     decl1.agregar_hijo(ASTNode("identificador", valor="x,a"))
-    decl1.agregar_hijo(ASTNode("entero", valor=10))
-    
+    decl1.agregar_hijo(ASTNode("Asignacion"))
+
+
     decl2 = ASTNode("declaracion", linea=2, valor="float")
     decl2.agregar_hijo(ASTNode("identificador", valor="y"))
     
-    asignacion = ASTNode("asignacion", linea=3)
+    asignacion = ASTNode("Asignacion")
     asignacion.agregar_hijo(ASTNode("identificador", valor="y",linea=3))
-    expr = ASTNode("suma")
+    expr = ASTNode("operacion", valor="+", linea=3)
     expr.agregar_hijo(ASTNode("identificador", valor="x",linea=3))
     expr.agregar_hijo(ASTNode("flotante", valor=5.5))
     asignacion.agregar_hijo(expr)
     
     # Error de suma a un int con un float
-    asignacion2 = ASTNode("asignacion", linea=4)
-    asignacion2.agregar_hijo(ASTNode("identificador", valor="x",linea=4))
-    expr2 = ASTNode("suma")
-    expr2.agregar_hijo(ASTNode("identificador", valor="x", linea=4))
-    expr2.agregar_hijo(ASTNode("flotante", valor=5.5))
-    asignacion2.agregar_hijo(expr2)
+    # asignacion2 = ASTNode("asignacion")
+    # asignacion2.agregar_hijo(ASTNode("identificador", valor="x",linea=4))
+    # expr2 = ASTNode("suma")
+    # expr2.agregar_hijo(ASTNode("identificador", valor="x", linea=4))
+    # expr2.agregar_hijo(ASTNode("flotante", valor=5.5))
+    # asignacion2.agregar_hijo(expr2)
 
     # asignación de un float a un int
-
     # asignacion2 = ASTNode("asignacion", linea=4)
     # asignacion2.agregar_hijo(ASTNode("identificador", valor="y"))   
     # asignacion2.agregar_hijo(ASTNode("entero", valor=3))
+
+    asignacion2 = ASTNode("Asignacion", linea=4)
+    asignacion2.agregar_hijo(ASTNode("identificador", valor="x",linea=4))
+
+    expr2 = ASTNode("operacion", valor="-", linea=4)
+    expr2.agregar_hijo(ASTNode("entero", valor=5, linea=4))
+    op_mult = ASTNode("operacion", valor="*", linea=4)
+    op_mult.agregar_hijo(ASTNode("entero", valor=3, linea=4))
+    op_div = ASTNode("operacion", valor="/", linea=4)
+    op_div.agregar_hijo(ASTNode("entero", valor=8, linea=4))
+    op_div.agregar_hijo(ASTNode("entero", valor=2, linea=4))
+    op_mult.agregar_hijo(op_div)
+    expr2.agregar_hijo(op_mult)
+    asignacion2.agregar_hijo(expr2)
+
+
+    """
+    ASTNode(nom:Incremento ++, val:None, linea:20)
+        ASTNode(nom:Asignacion, val: , linea:20)
+            ASTNode(nom:ID, val:a, linea:20)
+            ASTNode(nom:Operacion, val:+, linea:20)
+                ASTNode(nom:ID, val:a, linea:20)
+                ASTNode(nom:entero, val:1, linea:20)
+    """
+
+    incremento = ASTNode("Incremento", linea=5)
+    incrementoh = ASTNode("asignacion", linea=5)
+    incrementoh.agregar_hijo(ASTNode("identificador", valor="x",linea=5))
+    inc_expr = ASTNode("operacion", valor="+", linea=5)
+    inc_expr.agregar_hijo(ASTNode("identificador", valor="x",linea=5))
+    inc_expr.agregar_hijo(ASTNode("entero", valor=1,linea=5))
+    incrementoh.agregar_hijo(inc_expr)
+    incremento.agregar_hijo(incrementoh)
 
     programa.agregar_hijo(decl1)
     programa.agregar_hijo(decl2)
     programa.agregar_hijo(asignacion)
     programa.agregar_hijo(asignacion2)
+    programa.agregar_hijo(incremento)
 
     # Análisis semántico
     analyzer = SemAnalyzer()

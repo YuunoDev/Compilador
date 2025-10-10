@@ -74,7 +74,7 @@ class ASTNode:
         self.es_error = True
     
     def __repr__(self):
-        return f"ASTNode(nom:{self.tipo}, val:{self.valor}, linea:{self.linea})"
+        return f"ASTNode(nom:{self.tipo}, val:{type(self.valor)}, linea:{self.linea})"
 
 class Parser:
     def __init__(self, tokens: List[Token]):
@@ -148,7 +148,7 @@ class Parser:
             tok = self.actual()
             
             if (tok.tipo == "SIMBOLO" and tok.lexema == ";") or \
-               (tok.tipo == "RESERVADA" and tok.lexema in ["int", "float", "char", "print", "if", "while", "do", "main", "end"]):
+               (tok.tipo == "RESERVADA" and tok.lexema in ["int", "float","bool", "char", "print", "if", "while", "do", "main", "end", "true", "false"]):
                 self.pos += 1
                 self.modo_panico = False
                 return True
@@ -180,12 +180,6 @@ class Parser:
                     
                     for var_name in variables:
                         if var_name in self.variables_declaradas:
-                            self.errores.append(Error(
-                                ErrorTipo.SEMANTICO,
-                                f"Variable '{var_name}' ya declarada",
-                                nodo.linea or 0,
-                                nodo.columna or 0
-                            ))
                             nodo.marcar_error()
                         else:
                             self.variables_declaradas.add(var_name)
@@ -353,14 +347,14 @@ class Parser:
             
             nodo = ASTNode("Declaracion", f"{tipo.lexema}",
                           linea=tipo.linea, columna=tipo.columna)
-            nodo.agregar_hijo(ASTNode("ID", f"{', '.join(variables)}",
+            nodo.agregar_hijo(ASTNode("identificador", f"{', '.join(variables)}",
                           linea=tipo.linea, columna=tipo.columna))
 
             # Verificar si hay asignación inicial (solo para una variable)
             if len(variables) == 1 and self.actual() and self.actual().tipo == "ASIGNACION":
                 self.consumir("ASIGNACION")
                 nodo_asig = ASTNode("Asignacion", " ", linea=" ", columna=" ")
-                nodo_asig.agregar_hijo(ASTNode("ID", variables[0], linea=tipo.linea, columna=tipo.columna))
+                nodo_asig.agregar_hijo(ASTNode("identificador", variables[0], linea=tipo.linea, columna=tipo.columna))
                 
                 expr = self.parse_expresion()
                 if expr:
@@ -573,14 +567,14 @@ class Parser:
                           linea=ident.linea, columna=ident.columna)
             #nodo asignación
             nodo_asig = ASTNode("Asignacion", " ", linea=ident.linea, columna=ident.columna)
-            nodo_asig.agregar_hijo(ASTNode("ID", ident.lexema, linea=ident.linea, columna=ident.columna))
+            nodo_asig.agregar_hijo(ASTNode("identificador", ident.lexema, linea=ident.linea, columna=ident.columna))
             nodo.agregar_hijo(nodo_asig)
 
             # agregar operador
             nodoop = ASTNode("Operacion", "+" if op.lexema == "++" else "-", linea=ident.linea, columna=ident.columna)
             nodo_asig.agregar_hijo(nodoop)
-            nodoop.agregar_hijo(ASTNode("valor", ident.lexema, linea=ident.linea, columna=ident.columna))
-            nodoop.agregar_hijo(ASTNode("valor", "1", linea=op.linea, columna=op.columna))
+            nodoop.agregar_hijo(ASTNode("identificador", ident.lexema, linea=ident.linea, columna=ident.columna))
+            nodoop.agregar_hijo(ASTNode("entero", "1", linea=op.linea, columna=op.columna))
 
             return nodo
             
@@ -616,7 +610,7 @@ class Parser:
                 ))
             
             nodo = ASTNode("Cin", linea=cin_tok.linea, columna=cin_tok.columna)
-            nodo.agregar_hijo(ASTNode("ID", variable.lexema, linea=variable.linea, columna=variable.columna))
+            nodo.agregar_hijo(ASTNode("identificador", variable.lexema, linea=variable.linea, columna=variable.columna))
             
             return nodo
             
@@ -712,7 +706,7 @@ class Parser:
                 ))
             
             nodo = ASTNode("Asignacion"," ", linea=" ", columna=" ")
-            nodo.agregar_hijo(ASTNode("ID", ident.lexema, linea=ident.linea, columna=ident.columna))
+            nodo.agregar_hijo(ASTNode("identificador", ident.lexema, linea=ident.linea, columna=ident.columna))
             if valor:
                 nodo.agregar_hijo(valor)
                 
@@ -794,14 +788,13 @@ class Parser:
             token = self.consumir()
             return ASTNode("flotante", token.lexema, linea=token.linea, columna=token.columna)
 
+        elif tok.tipo == "BOOLEANO":
+            token = self.consumir()
+            return ASTNode("booleano", str(token.lexema), linea=token.linea, columna=token.columna)
+
         elif tok.tipo == "IDENTIFICADOR":
             token = self.consumir()
             return ASTNode("identificador", token.lexema, linea=token.linea, columna=token.columna)
-
-        elif tok.tipo == "BOOLEANO":
-            token = self.consumir()
-            return ASTNode("booleano", token.lexema, linea=token.linea, columna=token.columna)
-
 
         else:
             # Token no reconocido en expresión
@@ -868,7 +861,7 @@ def agregar_nodo(tree, parent_id, nodo):
         columna = getattr(nodo, "columna", "")
         valor = nodo.valor if nodo.valor else ""
 
-        print(nodo.__repr__())
+        #print(nodo.__repr__())
         
         node_id = tree.insert(
             parent_id, "end", text=texto,

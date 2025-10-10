@@ -21,11 +21,3 @@ class Fileamin:
     
     def Dfile(self):
         self.ruta = ""
-
-
-
-F = Fileamin()
-
-F.setRuta("hola")
-
-print(F.getRuta())
