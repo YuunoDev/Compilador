@@ -4,6 +4,7 @@ main {
 	c=1;
 	bool g=false;
 	int n=1;
+    int suma;
     suma = 45;
     x = 32.32;
     a=24.0+4-1/3*2+34-1;

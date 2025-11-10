@@ -2,7 +2,6 @@ from dataclasses import dataclass, field
 import enum
 from typing import Any,Optional
 
-
 class ASTNode:
     def __init__(self, tipo, valor=None, linea=None, columna=None):
         self.tipo = tipo
@@ -96,9 +95,7 @@ class SymbolTable:
         """Actualiza las líneas de un símbolo existente"""
         symbol = self.lookup(name)
         if symbol:
-            # si existe la linea no agregarla
-            if line not in symbol.lines:
-                symbol.lines.append(line)
+            symbol.lines.append(line)
             return True
         return False
     
@@ -128,13 +125,13 @@ class SymbolTable:
         for i, scope in enumerate(self.scopes):
             scope_name = "global" if i == 0 else f"scope_{i}"
             resp += f"\n\nÁmbito: {scope_name}"
-            resp += "\n" + ("-" * 60)
-            resp += f"\n{'Nombre':<15} {'Tipo':<10} {'Valor':<15} {'Usada':<12} {'Línea':<20}"
-            resp += "\n" + ("-" * 60)
+            resp += "\n" + ("-" * 100)
+            resp += f"\n   {'Nombre':<15} {'Tipo':<10} {'Valor':<15} {'Usada':<12} {'Línea':<20}"
+            resp += "\n" + ("-" * 100)
             for name, symbol in scope.items():
                 init_status = "Sí" if symbol.is_initialized else "No"
-                resp += f"\n{symbol.name:<15} {symbol.data_type.value:<10} {str(symbol.value):<15} {init_status:<12} {symbol.lines}"
-                resp += "\n" + ("-" * 60)
+                resp += f"\n   {symbol.name:<15} {symbol.data_type.value:<10} {str(symbol.value):<15} {init_status:<12} {symbol.lines}"
+                resp += "\n" + ("-" * 100)
                 resp += "\n"
 
         return resp

@@ -13,7 +13,7 @@ class Automata:
         self.position = 0
         self.line = 1
         self.column = 0
-        self.reserved = ["print","if", "else", "while", "end", "do", "int", "float","main", "cin", "cout", "string", "bool", "True", "False","true","false", "return", "void", "break", "continue", "for", "foreach","delete", "this"]
+        self.reserved = ["print","if", "else", "while", "end", "do", "int", "float","main", "cin", "cout", "string", "bool", "True", "False","true","false", "return", "void", "break", "continue", "for", "foreach","delete", "this","until"]
         self.errors = []
         self.columncomment = 0
         self.linecomment = 0

@@ -9,6 +9,7 @@ from tkinter import messagebox
 from Lex.Anlex import *
 from Sin.AnSin import *
 from Sem.AnSem import *
+from Ad_Ex.Exec import *
 import json
 import os
 from Fileamd.File import *
@@ -21,6 +22,8 @@ DFAC = Automata()
 # Clase de sematico
 SEM= SemAnalyzer()
 
+#Configuración
+CONF = Exec()
 #colores
 # Definir colores para cada tipo de token
 COLORES = {
@@ -355,11 +358,9 @@ def ejecución_sem(ast: ASTNode):
     #print("analisis sem")
     SEM.analizar(ast)
     #Tablas
-    terminalse.config(state="normal")
-    terminalse.delete("1.0", tk.END)
-    terminalse.config(state="normal")
-    terminalse.insert(tk.END, SEM.symbol_table.display_r())
-    terminalse.config(state="disabled")
+    terminalej.config(state="normal")
+    terminalej.insert(tk.END, SEM.symbol_table.display_r())
+    terminalej.config(state="disabled")
 
     #errores
     terminalsem.config(state="normal")
@@ -389,12 +390,8 @@ def thread_ejecutar():
 
         SEM.erase()
 
-        terminalse.config(state="normal")
-        terminalse.delete("1.0", END)
         terminalsem.config(state="normal")
         terminalsem.delete("1.0", END)
-
-
 
         # Terminal de ejecución
         terminalej.config(state="normal")
@@ -466,6 +463,9 @@ def on_key_release(event):
     show_cursor_position(event)
     debounce_colorText()
 
+def confex():
+    pass
+
 ##### Fin de ventanas fuera de la principal
 
 
@@ -478,10 +478,11 @@ root.state('zoomed')
 # Color de fondo de la ventana principal
 root.configure(bg="#1e1e1e")  # Fondo oscuro
 style = ttk.Style()
-style.theme_use('alt')
+style.theme_use('clam')
 style.configure("TNotebook", background="#1e1e1e")
 style.configure("TNotebook.Tab", background="#2d2d2d", foreground="#d4d4d4", lightcolor="#2d2d2d", borderwidth=0)
 style.map("TNotebook.Tab", background=[("selected", "#1e1e1e")])
+
 
 # Menú superior
 menubar = Menu(root)
@@ -499,6 +500,7 @@ menubar.add_separator()
 
 Configmenu= Menu(menubar, tearoff=0)
 Configmenu.add_command(label="Color texto", command=colortexto)
+Configmenu.add_command(label="Ejecución", command=confex)
 menubar.add_cascade(menu=Configmenu, label="Configuración")
 
 # Menú superior
@@ -533,10 +535,17 @@ guardar_como_icon = guardar_como_icon.subsample(20, 20)
 guardar_como_btn = Button(iconbar, image=guardar_como_icon, command=guardar_como, bg="#999999", activebackground="#3c3c3c")
 guardar_como_btn.pack(side="left", padx=5, pady=5)
 
+# divicion
+mainpanel = ttk.PanedWindow(root, orient=tk.VERTICAL)
+mainpanel.pack(fill="both", expand=True)
+
+#superior horizontal
+toppanel = ttk.PanedWindow(mainpanel, orient=tk.HORIZONTAL)
+mainpanel.add(toppanel, weight=1)
 
 
 # Frame para contener el área de texto y los números de línea
-frame = Frame(root)
+frame = Frame(toppanel, bg="#1e1e1e")
 frame.pack(fill="both", expand=True)
 
 # Widget para los números de línea
@@ -546,28 +555,24 @@ lineas = Text(frame, width=4, padx=4, takefocus=0, border=0,
 lineas.pack(side="left", fill="y")
 # Colores para la barra de números de línea
 lineas.config(bg="#2d2d2d", fg="#d4d4d4")
-
 # Widget de texto principal
 texto = Text(frame, bd=0, padx=6, pady=4, font=("Consolas", 12), undo=True,  wrap="none")
-
 # Colores para el área de texto principal
 texto.config(bg="#1e1e1e", fg="#d4d4d4", insertbackground="#d4d4d4")
-
 # Añadir el widget de texto al frame
 texto.pack(side="left", fill="both", expand=True)
-
 # Scrollbar para sincronizar el desplazamiento
 scrollbar = Scrollbar(frame)
 scrollbar.pack(side="right", fill="y")
 scrollbar.config(bg="#2d2d2d", troughcolor="#1e1e1e", activebackground="#555555")
-
 # Configurar el scrollbar y los widgets de texto
 scrollbar.config(command=multiple_yview)
 texto.config(yscrollcommand=sync_scroll)
 lineas.config(yscrollcommand=scrollbar.set)
+toppanel.add(frame, weight=1)
 
-# Frame para terminales
-frame_terminal = Frame(frame, bg="#1e1e1e")
+# Frame para terminales derechas,
+frame_terminal = Frame(toppanel, bg="#1e1e1e")
 frame_terminal.pack(fill="both", expand=True, side="right")
 
 #Pestañas para la terminal
@@ -611,18 +616,31 @@ scrollbar_tree.grid(row=0, column=1, sticky="ns")
 frame_terminaltreeSin.grid_rowconfigure(0, weight=1)
 frame_terminaltreeSin.grid_columnconfigure(0, weight=1)
 
-
-
 notebook_terminal.add(frame_terminaltreeSin, text="Terminal Sintáctica")
 
-# Terminal semántica
+# Terminal semántica árbol
 frame_terminalse = Frame(notebook_terminal, bg="#1e1e1e")
-terminalse = Text(frame_terminalse, height=5, bg="#1e1e1e", fg="#d4d4d4")
-terminalse.pack(fill="both", expand=True)
-terminalse.config(state="disabled")
+terminalse = ttk.Treeview(frame_terminalse, columns=("Valor", "Tipo", "Ámbito"), show="tree headings")
+# Encabezados
+terminalse.heading("#0", text="Símbolo")
+terminalse.heading("Valor", text="Valor")
+terminalse.heading("Tipo", text="Tipo")
+terminalse.heading("Ámbito", text="Ámbito")
+# Ajustes de columnas
+terminalse.column("#0", width=200, anchor="w")
+terminalse.column("Valor", width=150, anchor="w")
+terminalse.column("Tipo", width=100, anchor="center")
+terminalse.column("Ámbito", width=100, anchor="center")
+# Scrollbar para el tree
+scrollbar_tree_se = ttk.Scrollbar(frame_terminalse, orient="vertical", command=terminalse.yview)
+terminalse.configure(yscrollcommand=scrollbar_tree_se.set)
+terminalse.grid(row=0, column=0, sticky="nsew")
+scrollbar_tree_se.grid(row=0, column=1, sticky="ns")
+frame_terminalse.grid_rowconfigure(0, weight=1)
+frame_terminalse.grid_columnconfigure(0, weight=1)
 
-notebook_terminal.add(frame_terminalse, text="Terminal Semántica")
-
+notebook_terminal.add(frame_terminalse, text="Terminal Semántica Árbol")
+toppanel.add(frame_terminal, weight=1)
 
 # Contenedor de ventanas (Notebook)
 notebook = ttk.Notebook(root, style="Custom.TNotebook")
@@ -658,6 +676,7 @@ terminalsem.pack(fill="both",expand=TRUE)
 terminalsem.config(state="disabled")
 
 notebook.add(frame_terminalsem, text="Errores Semáticos")
+mainpanel.add(notebook, weight=2)
 
 # Vincular el evento de modificación para actualizar los números de línea automáticamente
 texto.bind("<<Modified>>", on_text_change)
