@@ -20,6 +20,9 @@ class ASTNode:
     
     def marcar_error(self):
         self.es_error = True
+
+    def marcar_warning(self):
+        self.es_warning = True
     
     def __repr__(self):
         return f"ASTNode({self.tipo}, {self.valor})"
@@ -30,6 +33,8 @@ class DataType(enum.Enum):
     STRING = "string"
     BOOL = "bool"
     ERROR = "error"
+    UNDEFINED = "undefined"
+    INCOMPATIBLE = "incompatible"
 
 #sacar tipo de operacion
 def tipo_op(op):
@@ -136,17 +141,20 @@ class SymbolTable:
 
         return resp
        
+
 class SemAnalyzer:
     def __init__(self):
         self.symbol_table = SymbolTable()
         self.errors = []
         self.warnings = []
+        self.tree = ASTNode("Raiz", valor="", linea="", columna="")
 
     def erase(self):
         """Elimina todos los simbolos excepto el global"""
         self.symbol_table.erase()
         self.errors = []
         self.warnings = []
+        self.tree = ASTNode("Raiz", valor="", linea="", columna="")
 
     def analizar(self, nodo: ASTNode):
         """Analiza el AST recursivamente"""
@@ -170,11 +178,18 @@ class SemAnalyzer:
         tipo = nodo.valor  # Tipo de dato
         identificador = nodo.hijos[0].valor  # Nombre de la variable
         linea = nodo.linea
+        columna = nodo.columna
+        tree_declaracion= ASTNode("Declaracion",valor="",linea="", columna="")
+        tree_declaracion.agregar_hijo(ASTNode(tipo,valor=" ",linea=linea, columna=nodo.columna))
+        tree_dec_vars= []
+        var_nodo = None
 
         # Cuando se encunetran varias variables en la misma declaración, cortarlas cuando tengan coma ","
         if "," in identificador:
             vars = identificador.split(",")
+            print(f"Declarando multiples variables: {vars} de tipo {tipo}")
             for var in vars:
+                print(f"Declarando variable: {var} de tipo {tipo}")
                 var = var.strip()
                 if self.symbol_table.lookup(var):
                     self.errors.append(f"Error semántico: La variable '{var}' ya está declarada. Línea {linea}")
@@ -184,9 +199,11 @@ class SemAnalyzer:
                 symbol = Symbol(name=var, data_type=data_type, scope=self.symbol_table.current_scope, lines=[linea])
                 self.symbol_table.insert(symbol)
 
+                #aun sin funcionar
                 if len(nodo.hijos) > 1:  # Si hay una inicialización
                     # sigue una Asignación
                     self.analizar(nodo.hijos[1])
+                    print(f"nodo hijos asignacion: {nodo.hijos[1].hijos}")
                     valor_nodo = nodo.hijos[1].hijos[1]
                     valor = self.evaluar_expresion(valor_nodo)
                     if valor is not None:
@@ -196,11 +213,22 @@ class SemAnalyzer:
                         if not self.check_tipo_compatibility(data_type, valor_nodo.tipo_dato):
                             self.errors.append(f"Error semántico: Incompatibilidad de tipos en la inicialización de '{var}'. Línea {linea}")
                             nodo.marcar_error()
+                            #agregar error al arbol var
+                            var_nodo = ASTNode(("ID("+var+")"),valor="Error",linea=linea, columna=columna)
+                            var_nodo.tipo_dato=DataType.ERROR
                         else:
                             nodo.tipo_dato = data_type
-                    
+                            var_nodo = ASTNode(("ID("+var+")"),valor="",linea=linea, columna=columna)
+                            var_nodo.tipo_dato=data_type
+
+                        tree_dec_vars.append(var_nodo)
                 else:
                     nodo.tipo_dato = data_type
+                    var_nodo = ASTNode(("ID("+var+")"),valor="",linea=linea, columna=columna)
+                    var_nodo.tipo_dato=data_type
+                    tree_dec_vars.append(var_nodo)
+            
+
         else:
             if self.symbol_table.lookup(identificador):
                 self.errors.append(f"Error semántico: La variable '{identificador}' ya está declarada. Línea {linea}")
@@ -223,44 +251,72 @@ class SemAnalyzer:
                     if not self.check_tipo_compatibility(data_type, valor_nodo.tipo_dato):
                         self.errors.append(f"Error semántico: Incompatibilidad de tipos en la inicialización de '{var}'. Línea {linea}")
                         nodo.marcar_error()
+                        #var nodo con error
+                        var_nodo = ASTNode(("ID("+identificador+")"),valor="Error",linea=linea, columna=nodo.columna)
+                        var_nodo.tipo_dato=DataType.ERROR
+                        tree_dec_vars.append(var_nodo)
                     else:
                         nodo.tipo_dato = data_type
+                        var_nodo = ASTNode(("ID("+identificador+")"),valor="",linea=linea, columna=nodo.columna)
+                        var_nodo.tipo_dato=data_type
+                        tree_dec_vars.append(var_nodo)
             else:
                 nodo.tipo_dato = data_type
+                var_nodo = ASTNode(("ID("+identificador+")"),valor="",linea=linea, columna=nodo.columna)
+                var_nodo.tipo_dato=data_type
+                tree_dec_vars.append(var_nodo)
 
                 
         nodo.scope = self.symbol_table.current_scope
         nodo.use = True
         nodo.tipo_dato = data_type
+        for var_nodo in tree_dec_vars:
+            tree_declaracion.agregar_hijo(var_nodo)
+        self.tree.agregar_hijo(tree_declaracion)
         self.analizar(valor_nodo) if len(nodo.hijos) > 2 else None
 
     def analizar_asignacion(self, nodo: ASTNode):
         identificador = nodo.hijos[0].valor
         linea = nodo.hijos[0].linea
+        columna = nodo.hijos[0].columna
+        tree_asignacion= ASTNode("Asignacion",valor="",linea="", columna="")
 
         symbol = self.symbol_table.lookup(identificador)
         if not symbol:
             self.errors.append(f"Error semántico: La variable '{identificador}' no está declarada. Línea {linea}")
+            node_id = ASTNode("ID("+identificador+")", valor="Error", linea=linea, columna=columna)
+            node_id.tipo_dato = DataType.UNDEFINED
+            tree_asignacion.agregar_hijo(node_id)
+            self.tree.agregar_hijo(tree_asignacion)
             nodo.marcar_error()
             return
             
         valor_nodo = nodo.hijos[1]
-        valor = self.evaluar_expresion(valor_nodo)
+        valor, arbol_valor = self.evaluar_expresion(valor_nodo)
+        # se retorna en valores {nodo.valor, nodo_valor}
+
         if valor is not None:
             if not self.check_tipo_compatibility(symbol.data_type, valor_nodo.tipo_dato):
                 self.errors.append(f"Error semántico: Incompatibilidad de tipos en la asignación a '{identificador}'. Línea {linea}")
+                tree_asignacion.agregar_hijo(ASTNode("ID("+identificador+")",tipo_dato=DataType.INCOMPATIBLE,valor="Error",linea=linea, columna=columna))
                 nodo.marcar_error()
             else:
                 # si se detecta que es tipo diferente a lo ingresado mandar error de asignación
                 if symbol.data_type == DataType.INT and valor_nodo.tipo_dato == DataType.FLOAT:
                     self.symbol_table.update_lines(identificador, linea)
                     self.errors.append(f"Error semántico: No se puede asignar un valor de tipo 'float' a una variable de tipo 'int' en '{identificador}'. Línea {linea}")
+                    node_id= ASTNode("ID("+identificador+")",valor="Error",linea=linea, columna=columna)
+                    node_id.tipo_dato = DataType.INCOMPATIBLE
+                    tree_asignacion.agregar_hijo(node_id)
                     nodo.marcar_error()
             
                 elif symbol.data_type == DataType.FLOAT and valor_nodo.tipo_dato == DataType.INT:
                     self.symbol_table.update(identificador, float(valor))
                     self.symbol_table.update_lines(identificador, linea)
                     valor_nodo.use = True
+                    nodo_id = ASTNode("ID("+identificador+")",valor=valor,linea=linea, columna=columna)
+                    nodo_id.tipo_dato = symbol.data_type
+                    tree_asignacion.agregar_hijo(nodo_id)
                     nodo.tipo_dato = symbol.data_type
                 else:
                     if symbol.data_type == DataType.INT:
@@ -269,53 +325,83 @@ class SemAnalyzer:
                         self.symbol_table.update(identificador, valor)
                     self.symbol_table.update_lines(identificador, linea)
                     valor_nodo.use = True
+                    nodo_id = ASTNode("ID("+identificador+")",valor=valor,linea=linea, columna=columna)
+                    nodo_id.tipo_dato = symbol.data_type
+                    tree_asignacion.agregar_hijo(nodo_id)
                     nodo.tipo_dato = symbol.data_type
         else:
+            nodo_id = ASTNode("ID("+identificador+")",valor="Error",linea=linea, columna=columna)
+            nodo_id.tipo_dato = DataType.UNDEFINED
+            tree_asignacion.agregar_hijo(nodo_id)
             nodo.marcar_error()
         
         nodo.scope = symbol.scope
         nodo.use = True
+        tree_asignacion.agregar_hijo(arbol_valor if arbol_valor else valor_nodo)
+        self.tree.agregar_hijo(tree_asignacion)
         self.analizar(valor_nodo)
     
     def analizar_expresion(self, nodo: ASTNode):
         if nodo.tipo == "entero":
             nodo.tipo_dato = DataType.INT
-            return nodo.valor
+            nodo_valor = ASTNode("entero",valor=nodo.valor,linea=nodo.linea, columna=nodo.columna)
+            nodo_valor.tipo_dato = DataType.INT
+            return nodo.valor, nodo_valor
         elif nodo.tipo == "flotante":
             nodo.tipo_dato = DataType.FLOAT
-            return nodo.valor
+            nodo_valor = ASTNode("flotante",valor=nodo.valor,linea=nodo.linea, columna=nodo.columna)
+            nodo_valor.tipo_dato = DataType.FLOAT
+            return nodo.valor, nodo_valor
         elif nodo.tipo == "cadena":
             nodo.tipo_dato = DataType.STRING
-            return nodo.valor
+            nodo_valor = ASTNode("cadena",valor=nodo.valor,linea=nodo.linea, columna=nodo.columna)
+            nodo_valor.tipo_dato = DataType.STRING
+            return nodo.valor, nodo_valor
         elif nodo.tipo == "booleano":
             nodo.tipo_dato = DataType.BOOL
-            return nodo.valor
+            nodo_valor = ASTNode("booleano",valor=nodo.valor,linea=nodo.linea, columna=nodo.columna)
+            nodo_valor.tipo_dato = DataType.BOOL
+            return nodo.valor, nodo_valor
         elif nodo.tipo == "identificador":
             symbol = self.symbol_table.lookup(nodo.valor)
             if not symbol:
                 self.errors.append(f"Error semántico: La variable '{nodo.valor}' no está declarada. Línea {nodo.linea}")
+                nodo_valor = ASTNode("ID("+nodo.valor+")",valor="Error",linea=nodo.linea, columna=nodo.columna)
+                nodo_valor.tipo_dato = DataType.UNDEFINED
                 nodo.marcar_error()
-                self.symbol_table.update_lines_r(symbol,nodo.linea)
-                return None
+                return None, nodo_valor
             if not symbol.is_initialized:
                 self.warnings.append(f"Advertencia semántica: La variable '{nodo.valor}' no está inicializada. Línea {nodo.linea}")
+                nodo.marcar_warning()
+                nodo_valor = ASTNode("ID("+nodo.valor+")",valor="Uninitialized",linea=nodo.linea, columna=nodo.columna)
+                nodo_valor.tipo_dato = symbol.data_type
+                return None, nodo_valor
             nodo.tipo_dato = symbol.data_type
             self.symbol_table.update_lines_r(symbol,nodo.linea)
             symbol.use = True
-            return symbol.value
+            nodo_valor = ASTNode("ID("+nodo.valor+")",valor=symbol.value,linea=nodo.linea, columna=nodo.columna)
+            nodo_valor.tipo_dato = symbol.data_type
+            return symbol.value, nodo_valor
         elif nodo.tipo in ["Operacion","operacion"]:
             left_nodo = nodo.hijos[0]
             right_nodo = nodo.hijos[1]
-            left_val = self.evaluar_expresion(left_nodo)
-            right_val = self.evaluar_expresion(right_nodo)
+            left_val, left_val_nodo = self.evaluar_expresion(left_nodo)
+            right_val, right_val_nodo = self.evaluar_expresion(right_nodo)
+            nodo_op = ASTNode(nodo.valor,valor="",linea=nodo.linea, columna=nodo.columna)
+            nodo_op.tipo_dato = ""
+            nodo_op.agregar_hijo(left_val_nodo)
+            nodo_op.agregar_hijo(right_val_nodo)
+
             if left_val is None or right_val is None:
                 nodo.marcar_error()
-                return None
+                nodo_op.tipo_dato = DataType.ERROR
+                return None, nodo_op
 
             if not self.check_tipo_compatibility(left_nodo.tipo_dato, right_nodo.tipo_dato):
                 self.errors.append(f"Error semántico: Incompatibilidad de tipos en la expresión. Línea {nodo.linea}")
                 nodo.marcar_error()
-                return None
+                nodo_op.tipo_dato = DataType.ERROR
+                return None, nodo_op
             
             tipo=tipo_op(nodo.valor)
 
@@ -335,15 +421,16 @@ class SemAnalyzer:
                     if right_val == 0:
                         self.errors.append(f"Error semántico: División por cero. Línea {nodo.linea}")
                         nodo.marcar_error()
-                        return None
-                    # si se detectan los valores como str cambiarlos a tipo que son
-                    resultado = left_val / right_val
+                        nodo_op.tipo_dato = DataType.ERROR
+                        return None, nodo_op
+                    resultado = int(left_val / right_val)
                         
                 nodo.tipo_dato = DataType.INT
-                return resultado
+                nodo_op.tipo_dato = DataType.INT
+                return resultado, nodo_op
             elif (left_nodo.tipo_dato == DataType.INT and right_nodo.tipo_dato == DataType.FLOAT) or \
-                    (left_nodo.tipo_dato == DataType.FLOAT and right_nodo.tipo_dato == DataType.INT) or \
-                    (left_nodo.tipo_dato == DataType.FLOAT and right_nodo.tipo_dato == DataType.FLOAT):
+                     (left_nodo.tipo_dato == DataType.FLOAT and right_nodo.tipo_dato == DataType.INT) or \
+                     (left_nodo.tipo_dato == DataType.FLOAT and right_nodo.tipo_dato == DataType.FLOAT):
                 if tipo == "suma":
                     resultado = float(left_val) + float(right_val)
                 elif tipo == "resta":
@@ -354,22 +441,29 @@ class SemAnalyzer:
                     if right_val == 0:
                         self.errors.append(f"Error semántico: División por cero. Línea {nodo.linea}")
                         nodo.marcar_error()
-                        return None
+                        nodo_op.tipo_dato = DataType.ERROR
+                        return None, nodo_op
                     resultado = float(left_val) / float(right_val)
                 nodo.tipo_dato = DataType.FLOAT
-                return resultado
+                nodo_op.tipo_dato = DataType.FLOAT
+                return resultado, nodo_op
             elif left_nodo.tipo_dato == DataType.STRING and right_nodo.tipo_dato == DataType.STRING and nodo.tipo == "suma":
                 resultado = left_val + right_val
                 nodo.tipo_dato = DataType.STRING
-                return resultado
+                nodo_op.tipo_dato = DataType.STRING
+                return resultado, nodo_op
             else:
                 self.errors.append(f"Error semántico: Operación no soportada entre tipos '{left_nodo.tipo_dato}' y '{right_nodo.tipo_dato}'. Línea {nodo.linea}")
+                nodo_op = ASTNode(nodo.valor,valor="Error",linea=nodo.linea, columna=nodo.columna)
+                nodo_op.tipo_dato = DataType.ERROR
                 nodo.marcar_error()
-                return None
+                return None, nodo_op
         else:
-            self.errors.append(f"Error semántico: Nodo de expresión desconocido '{nodo.tipo}'. Línea {nodo.linea}")
-            nodo.marcar_error()
-            return None
+             self.errors.append(f"Error semántico: Nodo de expresión desconocido '{nodo.tipo}'. Línea {nodo.linea}")
+             nodo_op = ASTNode(nodo.valor,valor="Error",linea=nodo.linea, columna=nodo.columna)
+             nodo_op.tipo_dato = DataType.ERROR
+             nodo.marcar_error()
+             return None, nodo_op
         
     def analizar_incremento(self,nodo: ASTNode):
         identificador = nodo.hijos[0].hijos[0].valor
@@ -423,7 +517,8 @@ class SemAnalyzer:
         self.analizar(nodo.hijos[0])
 
     def evaluar_expresion(self, nodo: ASTNode):
-        return self.analizar_expresion(nodo)
+        valor, arbol_valor = self.analizar_expresion(nodo)
+        return valor, arbol_valor
     
     def map_tipo(self, tipo_str: str) -> DataType:
         if tipo_str == "int":
@@ -458,7 +553,29 @@ class SemAnalyzer:
             report += error + "\n"
         for warning in self.warnings:
             report += warning + "\n"
-        return report
+        return report        
+    
+    def agregar_nodo(self, tree, parent_id, nodo):
+        # Determinar el color del texto basado en si hay errores
+        tags = ["error"] if nodo.es_error else []
+        
+        texto = f"{nodo.tipo}"
+        linea = getattr(nodo, "linea", "")
+        columna = getattr(nodo, "columna", "")
+        tipo = nodo.tipo_dato.value if nodo.tipo_dato else ""
+        valor = nodo.valor if nodo.valor else ""
+
+        #print(nodo.__repr__())
+        
+        node_id = tree.insert(
+            parent_id, "end", text=texto,
+            values=(tipo, valor, linea, columna), 
+            open=True,
+            tags=tags
+        )
+        
+        for hijo in nodo.hijos:
+            self.agregar_nodo(tree, node_id, hijo)
 
 # Ejemplo de uso
 if __name__ == "__main__":

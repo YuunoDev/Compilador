@@ -32,7 +32,7 @@ main {
             cin >> x;
             mas = 36 / 7;
         end
-    until(y == 5);
+    until(y == 5)
     while (y == 0)
         cin >> mas;
         cout << x;

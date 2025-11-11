@@ -73,6 +73,9 @@ class ASTNode:
     def marcar_error(self):
         self.es_error = True
     
+    def marcar_warning(self):
+        self.es_warning = True
+
     def __repr__(self):
         return f"ASTNode(nom:{self.tipo}, val:{type(self.valor)}, linea:{self.linea})"
 
@@ -351,7 +354,7 @@ class Parser:
                           linea=tipo.linea, columna=tipo.columna))
 
             # Verificar si hay asignación inicial (solo para una variable)
-            if len(variables) == 1 and self.actual() and self.actual().tipo == "ASIGNACION":
+            if self.actual() and self.actual().tipo == "ASIGNACION":
                 self.consumir("ASIGNACION")
                 nodo_asig = ASTNode("Asignacion", " ", linea=" ", columna=" ")
                 nodo_asig.agregar_hijo(ASTNode("identificador", variables[0], linea=tipo.linea, columna=tipo.columna))

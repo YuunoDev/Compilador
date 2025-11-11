@@ -362,6 +362,10 @@ def ejecución_sem(ast: ASTNode):
     terminalej.insert(tk.END, SEM.symbol_table.display_r())
     terminalej.config(state="disabled")
 
+    #arbol semantico
+    terminalse.delete(*terminalse.get_children())  # Limpiar el árbol
+    SEM.agregar_nodo(terminalse, '', SEM.tree)
+
     #errores
     terminalsem.config(state="normal")
     terminalsem.delete("1.0", tk.END)
@@ -620,17 +624,19 @@ notebook_terminal.add(frame_terminaltreeSin, text="Terminal Sintáctica")
 
 # Terminal semántica árbol
 frame_terminalse = Frame(notebook_terminal, bg="#1e1e1e")
-terminalse = ttk.Treeview(frame_terminalse, columns=("Valor", "Tipo", "Ámbito"), show="tree headings")
+terminalse = ttk.Treeview(frame_terminalse, columns=("Tipo","Valor", "Linea", "Columna"), show="tree headings")
 # Encabezados
 terminalse.heading("#0", text="Símbolo")
-terminalse.heading("Valor", text="Valor")
 terminalse.heading("Tipo", text="Tipo")
-terminalse.heading("Ámbito", text="Ámbito")
+terminalse.heading("Valor", text="Valor")
+terminalse.heading("Linea", text="Linea")
+terminalse.heading("Columna", text="Columna")
 # Ajustes de columnas
 terminalse.column("#0", width=200, anchor="w")
+terminalse.column("Tipo", width=150, anchor="w")
 terminalse.column("Valor", width=150, anchor="w")
-terminalse.column("Tipo", width=100, anchor="center")
-terminalse.column("Ámbito", width=100, anchor="center")
+terminalse.column("Linea", width=100, anchor="center")
+terminalse.column("Columna", width=100, anchor="center")
 # Scrollbar para el tree
 scrollbar_tree_se = ttk.Scrollbar(frame_terminalse, orient="vertical", command=terminalse.yview)
 terminalse.configure(yscrollcommand=scrollbar_tree_se.set)
