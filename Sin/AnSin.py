@@ -566,7 +566,7 @@ class Parser:
                     ident.columna
                 ))
 
-            nodo = ASTNode("Incremento ++" if op.lexema == "++" else "Decremento --", 
+            nodo = ASTNode("Incremento" if op.lexema == "++" else "Decremento", 
                           linea=ident.linea, columna=ident.columna)
             #nodo asignación
             nodo_asig = ASTNode("Asignacion", " ", linea=ident.linea, columna=ident.columna)
