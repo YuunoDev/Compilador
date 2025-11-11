@@ -77,7 +77,7 @@ def abrir():
 def open_thread():
     """Maneja la apertura del archivo en un hilo secundario."""
     ruta_temp = FileDialog.askopenfilename(
-        initialdir=".",
+        initialdir=FILER.getRuta() if FILER.getRuta() else ".",
         filetypes=[("Ficheros de texto", "*.txt")],
         title="Abrir un fichero de texto"
     )
@@ -716,4 +716,12 @@ status_right.pack(side="right")
 # Inicializa los números de línea
 actualizar_numeros_linea()
 
+# verificar si hay un archivo abierto previamente
+if FILER.load_state():
+    ruta_anterior = FILER.get_previous_file()
+    if ruta_anterior and os.path.exists(ruta_anterior):
+        FILER.setRuta(ruta_anterior)
+        leer_archivo(ruta_anterior)
+
+# Iniciar el bucle principal en un hilo separado
 tread_main=threading.Thread(target=root.mainloop())  # Bucle principal
