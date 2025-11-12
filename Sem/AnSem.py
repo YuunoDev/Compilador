@@ -26,6 +26,9 @@ class ASTNode:
 
     def marcar_warning(self):
         self.es_warning = True
+
+    def set_tipo(self, tipo):
+        self.tipo = tipo
     
     def __repr__(self):
         return f"ASTNode({self.tipo}, {self.valor})"
@@ -142,6 +145,11 @@ class SymbolTable:
             resp += "\n" + ("-" * 100)
             resp += f"\n   {'Nombre':<15} {'Tipo':<10} {'Valor':<15} {'Usada':<12} {'Línea':<20}"
             resp += "\n" + ("-" * 100)
+
+            # ajustar los valores de linea de menor a mayor 
+            for name, symbol in scope.items():
+                symbol.lines.sort()
+
             for name, symbol in scope.items():
                 init_status = "Sí" if symbol.is_initialized else "No"
                 resp += f"\n   {symbol.name:<15} {symbol.data_type.value:<10} {str(symbol.value):<15} {init_status:<12} {symbol.lines}"
@@ -196,9 +204,9 @@ class SemAnalyzer:
 
         if "," in identificador:
             vars = identificador.split(",")
-            print(f"Declarando multiples variables: {vars} de tipo {tipo}")
+            #print(f"Declarando multiples variables: {vars} de tipo {tipo}")
             for var in vars:
-                print(f"Declarando variable: {var} de tipo {tipo}")
+                #print(f"Declarando variable: {var} de tipo {tipo}")
                 var = var.strip()
                 if self.symbol_table.lookup(var):
                     self.errors.append(f"Error semántico: La variable '{var}' ya está declarada. Línea {linea}")
@@ -338,7 +346,7 @@ class SemAnalyzer:
                     nodo_id.tipo_dato = symbol.data_type
                     tree_asignacion.agregar_hijo(nodo_id)
                     nodo.tipo_dato = symbol.data_type
-                self.symbol_table.update_lines(identificador, linea)
+                #self.symbol_table.update_lines(identificador, linea)
         else:
             nodo_id = ASTNode("ID("+identificador+")",valor="Error",linea=linea, columna=columna)
             nodo_id.tipo_dato = DataType.UNDEFINED
@@ -389,10 +397,12 @@ class SemAnalyzer:
                 nodo.marcar_error()
                 return None, nodo_valor
             if not symbol.is_initialized:
-                self.warnings.append(f"Advertencia semántica: La variable '{nodo.valor}' no está inicializada. Línea {nodo.linea}")
+                if not self.warnings or f"Advertencia semántica: La variable '{nodo.valor}' no está inicializada. Línea {nodo.linea}" not in self.warnings:
+                    self.warnings.append(f"Advertencia semántica: La variable '{nodo.valor}' no está inicializada. Línea {nodo.linea}")
                 nodo.marcar_warning()
                 nodo_valor = ASTNode("ID("+nodo.valor+")",valor="Uninitialized",linea=nodo.linea, columna=nodo.columna)
                 nodo_valor.tipo_dato = symbol.data_type
+                self.symbol_table.update_lines(nodo.valor, nodo.linea)
                 return None, nodo_valor
             nodo.tipo_dato = symbol.data_type
             self.symbol_table.update_lines_r(symbol,nodo.linea)
@@ -444,10 +454,12 @@ class SemAnalyzer:
                         nodo.marcar_error()
                         nodo_op.tipo_dato = DataType.ERROR
                         return None, nodo_op
-                    resultado = int(left_val / right_val)
-                        
+                    resultado = left_val / right_val
+                    resultado = int(resultado)  # Truncar a entero
+
                 nodo.tipo_dato = DataType.INT
                 nodo_op.tipo_dato = DataType.INT
+                nodo_op.set_tipo(nodo.valor+"("+str(resultado)+")")
                 return resultado, nodo_op
             elif (left_nodo.tipo_dato == DataType.INT and right_nodo.tipo_dato == DataType.FLOAT) or \
                      (left_nodo.tipo_dato == DataType.FLOAT and right_nodo.tipo_dato == DataType.INT) or \
@@ -465,8 +477,11 @@ class SemAnalyzer:
                         nodo_op.tipo_dato = DataType.ERROR
                         return None, nodo_op
                     resultado = float(left_val) / float(right_val)
+                    #truncar resultado a 4 decimales
+                    #resultado = float(f"{resultado:.4f}")
                 nodo.tipo_dato = DataType.FLOAT
                 nodo_op.tipo_dato = DataType.FLOAT
+                nodo_op.set_tipo(nodo.valor+"("+str(resultado)+")")
                 return resultado, nodo_op
             elif left_nodo.tipo_dato == DataType.STRING and right_nodo.tipo_dato == DataType.STRING and nodo.tipo == "suma":
                 resultado = left_val + right_val
@@ -605,9 +620,11 @@ class SemAnalyzer:
             if not symbol:
                 nodo_valor = ASTNode("ID("+nodo.valor+")", valor="Error", linea=nodo.linea, columna=nodo.columna)
                 nodo_valor.tipo_dato = DataType.UNDEFINED
+                self.symbol_table.update_lines(nodo.valor, nodo.linea)
                 return None, nodo_valor
             nodo_valor = ASTNode("ID("+nodo.valor+")", valor=symbol.value, linea=nodo.linea, columna=nodo.columna)
             nodo_valor.tipo_dato = symbol.data_type
+            self.symbol_table.update_lines(nodo.valor, nodo.linea)
             return symbol.value, nodo_valor
         elif nodo.tipo in ["Operacion", "operacion", "OperacionComparacion", "Operacioncomparacion", "OperacionLogica", "Operacionlogica"]:
             # Para operaciones complejas, evaluarlas recursivamente
@@ -675,7 +692,10 @@ class SemAnalyzer:
             return None
         
         if not symbol.is_initialized:
-            self.warnings.append(f"Advertencia semántica: La variable '{identificador}' no está inicializada. Línea {linea}")
+
+            #verificar que el error no este ya marcado 
+            if not self.warnings or f"Advertencia semántica: La variable '{identificador}' no está inicializada. Línea {linea}" not in self.warnings:
+                self.warnings.append(f"Advertencia semántica: La variable '{identificador}' no está inicializada. Línea {linea}")
             self.symbol_table.update_lines(identificador, linea)
             nodo.marcar_warning()
         

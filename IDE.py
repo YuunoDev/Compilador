@@ -371,8 +371,7 @@ def ejecución_sem(ast: ASTNode):
     terminalsem.delete("1.0", tk.END)
     terminalsem.config(state="normal")
     terminalsem.insert(tk.END, SEM.report_errors_r())
-    terminalsem.config(state="disabled")   
-
+    terminalsem.config(state="disabled")      
 
 def thread_ejecutar():
     """
@@ -538,6 +537,11 @@ guardar_como_icon = PhotoImage(file="icons/guardar_como.png")
 guardar_como_icon = guardar_como_icon.subsample(20, 20)
 guardar_como_btn = Button(iconbar, image=guardar_como_icon, command=guardar_como, bg="#999999", activebackground="#3c3c3c")
 guardar_como_btn.pack(side="left", padx=5, pady=5)
+
+compilar_icon = PhotoImage(file="icons/compile.png")
+compilar_icon = compilar_icon.subsample(20, 20)
+compilar_btn = Button(iconbar, image=compilar_icon, command=ejecutar_codigo, bg="#999999", activebackground="#3c3c3c")
+compilar_btn.pack(side="left", padx=5, pady=5)
 
 # divicion
 mainpanel = ttk.PanedWindow(root, orient=tk.VERTICAL)
