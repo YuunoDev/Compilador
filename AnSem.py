@@ -3,9 +3,10 @@ import enum
 from typing import Any,Optional
 
 class ASTNode:
-    def __init__(self, tipo, valor=None, linea=None, columna=None):
+    def __init__(self, tipo, valor=None, linea=None, columna=None, id=""):
         self.tipo = tipo
         self.valor = valor
+        self.id = id
         self.linea = linea
         self.columna = columna
         self.hijos :ASTNode = []
@@ -67,6 +68,10 @@ def tipo_op(op):
         return "and"
     elif op == "||":
         return "or"
+    elif op == "!":
+        return "not"
+    elif op == "%":
+        return "modulo"
     else:
         return "desconocido"
 
@@ -138,24 +143,30 @@ class SymbolTable:
                 print(f"{symbol.name:<15} {symbol.data_type.value:<10} {str(symbol.value):<15} {init_status:<12} {symbol.lines}")
 
     def display_r(self):
-        resp= "\n=== TABLA DE SÍMBOLOS ==="
+        """
+        Devuelve la tabla de símbolos en un formato estructurado para insertar en Treeview.
+        """
+        tabla = []
+
         for i, scope in enumerate(self.scopes):
             scope_name = "global" if i == 0 else f"scope_{i}"
-            resp += f"\n\nÁmbito: {scope_name}"
-            resp += "\n" + ("-" * 100)
-            resp += f"\n   {'Nombre':<15} {'Tipo':<10} {'Valor':<15} {'Usada':<12} {'Línea':<20}"
-            resp += "\n" + ("-" * 100)
 
-            # ajustar los valores de linea de menor a mayor 
+            # ordenar líneas
             for name, symbol in scope.items():
                 symbol.lines.sort()
 
             for name, symbol in scope.items():
-                init_status = "Sí" if symbol.is_initialized else "No"
-                resp += f"\n   {symbol.name:<15} {symbol.data_type.value:<10} {str(symbol.value):<15} {init_status:<12} {symbol.lines}"
-                resp += "\n" + ("-" * 100)
-                resp += "\n"
-        return resp
+                tabla.append({
+                    "ambito": scope_name,
+                    "nombre": symbol.name,
+                    "tipo": symbol.data_type.value,
+                    "valor": symbol.value,
+                    "usada": "Sí" if symbol.is_initialized else "No",
+                    "lineas": ", ".join(map(str, symbol.lines))
+                })
+
+        return tabla
+
 
 class SemAnalyzer:
     def __init__(self):
@@ -192,6 +203,7 @@ class SemAnalyzer:
         for hijo in nodo.hijos:
             self.analizar(hijo, self.tree)
 
+    
     def analizar_declaracion(self, nodo: ASTNode, parent_tree_node=None):
         tipo = nodo.valor
         identificador = nodo.hijos[0].valor
@@ -201,6 +213,9 @@ class SemAnalyzer:
         tree_declaracion.agregar_hijo(ASTNode(tipo,valor=" ",linea=linea, columna=nodo.columna))
         tree_dec_vars= []
         var_nodo = None
+        
+        # INICIALIZAR data_type al inicio
+        data_type = self.map_tipo(tipo)
 
         if "," in identificador:
             vars = identificador.split(",")
@@ -212,72 +227,56 @@ class SemAnalyzer:
                     self.errors.append(f"Error semántico: La variable '{var}' ya está declarada. Línea {linea}")
                     nodo.marcar_error()
                     continue
-                data_type = self.map_tipo(tipo)
+                
                 symbol = Symbol(name=var, data_type=data_type, scope=self.symbol_table.current_scope, lines=[linea])
                 self.symbol_table.insert(symbol)
 
                 if len(nodo.hijos) > 1:
-                    self.analizar(nodo.hijos[1], tree_declaracion)
-                    print(f"nodo hijos asignacion: {nodo.hijos[1].hijos}")
-                    valor_nodo = nodo.hijos[1].hijos[1]
-                    valor = self.evaluar_expresion(valor_nodo)
-                    if valor is not None:
-                        symbol.value = valor
-                        symbol.is_initialized = True
-                        valor_nodo.use = True
-                        if not self.check_tipo_compatibility(data_type, valor_nodo.tipo_dato):
-                            self.errors.append(f"Error semántico: Incompatibilidad de tipos en la inicialización de '{var}'. Línea {linea}")
-                            nodo.marcar_error()
-                            var_nodo = ASTNode(("ID("+var+")"),valor="Error",linea=linea, columna=columna)
-                            var_nodo.tipo_dato=DataType.ERROR
-                        else:
-                            nodo.tipo_dato = data_type
-                            var_nodo = ASTNode(("ID("+var+")"),valor="",linea=linea, columna=columna)
-                            var_nodo.tipo_dato=data_type
-                        tree_dec_vars.append(var_nodo)
+                    # No redefinir data_type aquí, ya lo tenemos
+                    symbol = Symbol(name=identificador, data_type=data_type, scope=self.symbol_table.current_scope, lines=[linea])
+                    self.symbol_table.insert(symbol)
+
+                    nodo.tipo_dato = data_type
+                    var_nodo = ASTNode(("ID("+identificador+")"),id=str(identificador),valor="",linea=linea, columna=nodo.columna)
+                    var_nodo.tipo_dato=data_type
+                    tree_dec_vars.append(var_nodo)
                 else:
                     nodo.tipo_dato = data_type
-                    var_nodo = ASTNode(("ID("+var+")"),valor="",linea=linea, columna=columna)
+                    var_nodo = ASTNode(("ID("+var+")"),id=str(var),valor="",linea=linea, columna=columna)
                     var_nodo.tipo_dato=data_type
                     tree_dec_vars.append(var_nodo)
         else:
             if self.symbol_table.lookup(identificador):
                 self.errors.append(f"Error semántico: La variable '{identificador}' ya está declarada. Línea {linea}")
                 nodo.marcar_error()
+                # Agregar al menos el nodo de declaración aunque tenga error
+                if parent_tree_node is not None:
+                    parent_tree_node.agregar_hijo(tree_declaracion)
                 return tree_declaracion
-
-            data_type = self.map_tipo(tipo)
-            symbol = Symbol(name=identificador, data_type=data_type, scope=self.symbol_table.current_scope, lines=[linea])
-            self.symbol_table.insert(symbol)
-
+            # asignacion o detecto asignacion
             if len(nodo.hijos) > 1:
-                self.analizar(nodo.hijos[1], tree_declaracion)
-                valor_nodo = nodo.hijos[1].hijos[1]
-                valor = self.evaluar_expresion(valor_nodo)
-                if valor is not None:
-                    symbol.value = valor
-                    symbol.is_initialized = True
-                    valor_nodo.use = True
-                    if not self.check_tipo_compatibility(data_type, valor_nodo.tipo_dato):
-                        self.errors.append(f"Error semántico: Incompatibilidad de tipos en la inicialización de '{identificador}'. Línea {linea}")
-                        nodo.marcar_error()
-                        var_nodo = ASTNode(("ID("+identificador+")"),valor="Error",linea=linea, columna=nodo.columna)
-                        var_nodo.tipo_dato=DataType.ERROR
-                        tree_dec_vars.append(var_nodo)
-                    else:
-                        nodo.tipo_dato = data_type
-                        var_nodo = ASTNode(("ID("+identificador+")"),valor="",linea=linea, columna=nodo.columna)
-                        var_nodo.tipo_dato=data_type
-                        tree_dec_vars.append(var_nodo)
-            else:
+                # data_type ya está definido al inicio
+                symbol = Symbol(name=identificador, data_type=data_type, scope=self.symbol_table.current_scope, lines=[linea])
+                self.symbol_table.insert(symbol)
+
                 nodo.tipo_dato = data_type
-                var_nodo = ASTNode(("ID("+identificador+")"),valor="",linea=linea, columna=nodo.columna)
+                var_nodo = ASTNode(("ID("+identificador+")"),id=str(identificador),valor="",linea=linea, columna=nodo.columna)
+                var_nodo.tipo_dato=data_type
+                tree_dec_vars.append(var_nodo)
+            else:
+                # Declaración sin asignación
+                symbol = Symbol(name=identificador, data_type=data_type, scope=self.symbol_table.current_scope, lines=[linea])
+                self.symbol_table.insert(symbol)
+                
+                nodo.tipo_dato = data_type
+                var_nodo = ASTNode(("ID("+identificador+")"),id=str(identificador),valor="",linea=linea, columna=columna)
                 var_nodo.tipo_dato=data_type
                 tree_dec_vars.append(var_nodo)
 
         nodo.scope = self.symbol_table.current_scope
         nodo.use = True
-        nodo.tipo_dato = data_type
+        nodo.tipo_dato = data_type  # Ahora data_type siempre está definido
+        
         for var_nodo in tree_dec_vars:
             tree_declaracion.agregar_hijo(var_nodo)
         
@@ -286,9 +285,11 @@ class SemAnalyzer:
             parent_tree_node.agregar_hijo(tree_declaracion)
         
         for hijo in nodo.hijos:
+            #print(f"Analizando hijo de declaracion: {hijo}")
             self.analizar(hijo, tree_declaracion)
         
         return tree_declaracion
+
 
     def analizar_asignacion(self, nodo: ASTNode, parent_tree_node=None):
         for hijo in nodo.hijos:
@@ -302,7 +303,7 @@ class SemAnalyzer:
         symbol = self.symbol_table.lookup(identificador)
         if not symbol:
             self.errors.append(f"Error semántico: La variable '{identificador}' no está declarada. Línea {linea}")
-            node_id = ASTNode("ID("+identificador+")", valor="Error", linea=linea, columna=columna)
+            node_id = ASTNode("ID("+identificador+")",id=str(identificador), valor="Error", linea=linea, columna=columna)
             node_id.tipo_dato = DataType.UNDEFINED
             tree_asignacion.agregar_hijo(node_id)
             if parent_tree_node is not None:
@@ -316,14 +317,14 @@ class SemAnalyzer:
         if valor is not None:
             if not self.check_tipo_compatibility(symbol.data_type, valor_nodo.tipo_dato):
                 self.errors.append(f"Error semántico: Incompatibilidad de tipos en la asignación a '{identificador}'. Línea {linea}")
-                tree_asignacion.agregar_hijo(ASTNode("ID("+identificador+")",tipo_dato=DataType.INCOMPATIBLE,valor="Error",linea=linea, columna=columna))
+                tree_asignacion.agregar_hijo(ASTNode("ID("+identificador+")",id=str(identificador),tipo_dato=DataType.INCOMPATIBLE,valor="Error",linea=linea, columna=columna))
                 self.symbol_table.update_lines(identificador, linea)
                 nodo.marcar_error()
             else:
                 if symbol.data_type == DataType.INT and valor_nodo.tipo_dato == DataType.FLOAT:
                     self.symbol_table.update_lines(identificador, linea)
                     self.errors.append(f"Error semántico: No se puede asignar un valor de tipo 'float' a una variable de tipo 'int' en '{identificador}'. Línea {linea}")
-                    node_id= ASTNode("ID("+identificador+")",valor="Error",linea=linea, columna=columna)
+                    node_id= ASTNode("ID("+identificador+")",id=str(identificador),valor="Error",linea=linea, columna=columna)
                     node_id.tipo_dato = DataType.INCOMPATIBLE
                     tree_asignacion.agregar_hijo(node_id)
                     nodo.marcar_error()
@@ -331,7 +332,7 @@ class SemAnalyzer:
                     self.symbol_table.update(identificador, float(valor))
                     self.symbol_table.update_lines(identificador, linea)
                     valor_nodo.use = True
-                    nodo_id = ASTNode("ID("+identificador+")",valor=valor,linea=linea, columna=columna)
+                    nodo_id = ASTNode("ID("+identificador+")",id=str(identificador),valor=valor,linea=linea, columna=columna)
                     nodo_id.tipo_dato = symbol.data_type
                     tree_asignacion.agregar_hijo(nodo_id)
                     nodo.tipo_dato = symbol.data_type
@@ -342,13 +343,13 @@ class SemAnalyzer:
                         self.symbol_table.update(identificador, valor)
                     self.symbol_table.update_lines(identificador, linea)
                     valor_nodo.use = True
-                    nodo_id = ASTNode("ID("+identificador+")",valor=valor,linea=linea, columna=columna)
+                    nodo_id = ASTNode("ID("+identificador+")",id=str(identificador),valor=valor,linea=linea, columna=columna)
                     nodo_id.tipo_dato = symbol.data_type
                     tree_asignacion.agregar_hijo(nodo_id)
                     nodo.tipo_dato = symbol.data_type
                 #self.symbol_table.update_lines(identificador, linea)
         else:
-            nodo_id = ASTNode("ID("+identificador+")",valor="Error",linea=linea, columna=columna)
+            nodo_id = ASTNode("ID("+identificador+")",id=str(identificador),valor="Error",linea=linea, columna=columna)
             nodo_id.tipo_dato = DataType.UNDEFINED
             tree_asignacion.agregar_hijo(nodo_id)
             self.symbol_table.update_lines(identificador, linea)
@@ -362,6 +363,7 @@ class SemAnalyzer:
         if parent_tree_node is not None:
             parent_tree_node.agregar_hijo(tree_asignacion)
         
+       # print(f"Asignación analizada: {tree_asignacion}")
         return tree_asignacion
    
     def analizar_expresion(self, nodo: ASTNode):
@@ -392,7 +394,7 @@ class SemAnalyzer:
             symbol = self.symbol_table.lookup(nodo.valor)
             if not symbol:
                 self.errors.append(f"Error semántico: La variable '{nodo.valor}' no está declarada. Línea {nodo.linea}")
-                nodo_valor = ASTNode("ID("+nodo.valor+")",valor="Error",linea=nodo.linea, columna=nodo.columna)
+                nodo_valor = ASTNode("ID("+nodo.valor+")",id=str(nodo.valor),valor="Error",linea=nodo.linea, columna=nodo.columna)
                 nodo_valor.tipo_dato = DataType.UNDEFINED
                 nodo.marcar_error()
                 return None, nodo_valor
@@ -400,14 +402,14 @@ class SemAnalyzer:
                 if not self.warnings or f"Advertencia semántica: La variable '{nodo.valor}' no está inicializada. Línea {nodo.linea}" not in self.warnings:
                     self.warnings.append(f"Advertencia semántica: La variable '{nodo.valor}' no está inicializada. Línea {nodo.linea}")
                 nodo.marcar_warning()
-                nodo_valor = ASTNode("ID("+nodo.valor+")",valor="Uninitialized",linea=nodo.linea, columna=nodo.columna)
+                nodo_valor = ASTNode("ID("+nodo.valor+")",id=str(nodo.valor),valor="Uninitialized",linea=nodo.linea, columna=nodo.columna)
                 nodo_valor.tipo_dato = symbol.data_type
                 self.symbol_table.update_lines(nodo.valor, nodo.linea)
                 return None, nodo_valor
             nodo.tipo_dato = symbol.data_type
             self.symbol_table.update_lines_r(symbol,nodo.linea)
             symbol.use = True
-            nodo_valor = ASTNode("ID("+nodo.valor+")",valor=symbol.value,linea=nodo.linea, columna=nodo.columna)
+            nodo_valor = ASTNode("ID("+nodo.valor+")",id=str(nodo.valor),valor=symbol.value,linea=nodo.linea, columna=nodo.columna)
             nodo_valor.tipo_dato = symbol.data_type
             return symbol.value, nodo_valor
         elif nodo.tipo in ["Operacion","operacion"]:
@@ -456,6 +458,13 @@ class SemAnalyzer:
                         return None, nodo_op
                     resultado = left_val / right_val
                     resultado = int(resultado)  # Truncar a entero
+                elif tipo == "modulo":
+                    if right_val == 0:
+                        self.errors.append(f"Error semántico: Módulo por cero. Línea {nodo.linea}")
+                        nodo.marcar_error()
+                        nodo_op.tipo_dato = DataType.ERROR
+                        return None, nodo_op
+                    resultado = left_val % right_val
 
                 nodo.tipo_dato = DataType.INT
                 nodo_op.tipo_dato = DataType.INT
@@ -479,6 +488,14 @@ class SemAnalyzer:
                     resultado = float(left_val) / float(right_val)
                     #truncar resultado a 4 decimales
                     #resultado = float(f"{resultado:.4f}")
+                elif tipo == "modulo":
+                    if right_val == 0:
+                        self.errors.append(f"Error semántico: Módulo por cero. Línea {nodo.linea}")
+                        nodo.marcar_error()
+                        nodo_op.tipo_dato = DataType.ERROR
+                        return None, nodo_op
+                    resultado = float(left_val) % float(right_val)
+
                 nodo.tipo_dato = DataType.FLOAT
                 nodo_op.tipo_dato = DataType.FLOAT
                 nodo_op.set_tipo(nodo.valor+"("+str(resultado)+")")
@@ -618,11 +635,11 @@ class SemAnalyzer:
         elif nodo.tipo == "identificador":
             symbol = self.symbol_table.lookup(nodo.valor)
             if not symbol:
-                nodo_valor = ASTNode("ID("+nodo.valor+")", valor="Error", linea=nodo.linea, columna=nodo.columna)
+                nodo_valor = ASTNode("ID("+nodo.valor+")",id=str(nodo.valor), valor="Error", linea=nodo.linea, columna=nodo.columna)
                 nodo_valor.tipo_dato = DataType.UNDEFINED
                 self.symbol_table.update_lines(nodo.valor, nodo.linea)
                 return None, nodo_valor
-            nodo_valor = ASTNode("ID("+nodo.valor+")", valor=symbol.value, linea=nodo.linea, columna=nodo.columna)
+            nodo_valor = ASTNode("ID("+nodo.valor+")",id=str(nodo.valor), valor=symbol.value, linea=nodo.linea, columna=nodo.columna)
             nodo_valor.tipo_dato = symbol.data_type
             self.symbol_table.update_lines(nodo.valor, nodo.linea)
             return symbol.value, nodo_valor
@@ -642,10 +659,13 @@ class SemAnalyzer:
         nodo_condicion.agregar_hijo(condicion_arbol if condicion_arbol else condicion_nodo)
         nodo_if.agregar_hijo(nodo_condicion)
 
+        # Verificar el tipo de dato del árbol devuelto, no del nodo original
+        arbol_tipo_dato = condicion_arbol.tipo_dato if condicion_arbol else condicion_nodo.tipo_dato
+        
         if condicion_val is None:
             self.errors.append(f"Error semántico: La condición del 'if' no es válida. Línea {nodo.linea}")
             nodo.marcar_error()
-        elif condicion_nodo.tipo_dato != DataType.BOOL:
+        elif arbol_tipo_dato is None or arbol_tipo_dato != DataType.BOOL:
             self.errors.append(f"Error semántico: La condición del 'if' debe ser de tipo 'bool'. Línea {nodo.linea}")
             nodo.marcar_error()
         
@@ -701,7 +721,7 @@ class SemAnalyzer:
         
         # Crear el nodo de incremento primero
         nodo_inc = ASTNode("Incremento", valor="++", linea=linea, columna=nodo.columna)
-        nodo_id = ASTNode(("ID("+identificador+")"), valor=identificador, linea=linea, columna=nodo.columna)
+        nodo_id = ASTNode(("ID("+identificador+")"),id=str(identificador), valor=identificador, linea=linea, columna=nodo.columna)
         nodo_id.tipo_dato = symbol.data_type
         nodo_inc.agregar_hijo(nodo_id)
         
@@ -744,7 +764,7 @@ class SemAnalyzer:
         
         # Crear el nodo de decremento primero
         nodo_dec = ASTNode("Decremento", valor="--", linea=linea, columna=nodo.columna)
-        nodo_id = ASTNode(("ID("+identificador+")"), valor=identificador, linea=linea, columna=nodo.columna)
+        nodo_id = ASTNode(("ID("+identificador+")"),id=str(identificador), valor=identificador, linea=linea, columna=nodo.columna)
         nodo_id.tipo_dato = symbol.data_type
         nodo_dec.agregar_hijo(nodo_id)
         
@@ -771,10 +791,13 @@ class SemAnalyzer:
         nodo_condicion.agregar_hijo(condicion_arbol if condicion_arbol else condicion_nodo)
         nodo_while.agregar_hijo(nodo_condicion)
 
+        # Verificar el tipo de dato del árbol devuelto, no del nodo original
+        arbol_tipo_dato = condicion_arbol.tipo_dato if condicion_arbol else condicion_nodo.tipo_dato
+        
         if condicion_val is None:
             self.errors.append(f"Error semántico: La condición del 'while' no es válida. Línea {nodo.linea}")
             nodo.marcar_error()
-        elif condicion_nodo.tipo_dato != DataType.BOOL:
+        elif arbol_tipo_dato is None or arbol_tipo_dato != DataType.BOOL:
             self.errors.append(f"Error semántico: La condición del 'while' debe ser de tipo 'bool'. Línea {nodo.linea}")
             nodo.marcar_error()
         
@@ -806,10 +829,13 @@ class SemAnalyzer:
         nodo_condicion.agregar_hijo(condicion_arbol if condicion_arbol else condicion_nodo)
         nodo_do_while.agregar_hijo(nodo_condicion)
 
+        # Verificar el tipo de dato del árbol devuelto, no del nodo original
+        arbol_tipo_dato = condicion_arbol.tipo_dato if condicion_arbol else condicion_nodo.tipo_dato
+        
         if condicion_val is None:
             self.errors.append(f"Error semántico: La condición del 'do-while' no es válida. Línea {nodo.linea}")
             nodo.marcar_error()
-        elif condicion_nodo.tipo_dato != DataType.BOOL:
+        elif arbol_tipo_dato is None or arbol_tipo_dato != DataType.BOOL:
             self.errors.append(f"Error semántico: La condición del 'do-while' debe ser de tipo 'bool'. Línea {nodo.linea}")
             nodo.marcar_error()
 
@@ -818,16 +844,103 @@ class SemAnalyzer:
         
         return nodo_do_while
     
+    def analizar_for(self, nodo: ASTNode, parent_tree_node=None):
+        """Analiza la estructura for"""
+        if len(nodo.hijos) < 4:
+            self.errors.append(f"Error semántico: Estructura 'for' incompleta. Línea {nodo.linea}")
+            return None
+        
+        nodo_for = ASTNode("For", valor="", linea=nodo.linea, columna=nodo.columna)
+        
+        # 1. INICIALIZACIÓN
+        init_nodo = nodo.hijos[0]
+        nodo_init = ASTNode("Inicializacion", valor="", linea=init_nodo.linea, columna=init_nodo.columna)
+        
+        if init_nodo.hijos:
+            for hijo in init_nodo.hijos:
+                self.analizar(hijo, nodo_init)
+        
+        nodo_for.agregar_hijo(nodo_init)
+        
+        # 2. CONDICIÓN
+        condicion_nodo = nodo.hijos[1]
+        
+        condicion_val = None
+        condicion_arbol = None
+        
+        if condicion_nodo.hijos:
+            condicion_val, condicion_arbol = self.evaluar_expresion(condicion_nodo.hijos[0])
+        
+        nodo_condicion = ASTNode("Condicion", valor="", linea=condicion_nodo.linea, columna=condicion_nodo.columna)
+        nodo_condicion.agregar_hijo(condicion_arbol if condicion_arbol else condicion_nodo)
+        nodo_for.agregar_hijo(nodo_condicion)
+        
+        # Verificar el tipo de dato del árbol devuelto
+        arbol_tipo_dato = condicion_arbol.tipo_dato if condicion_arbol else None
+        
+        if condicion_val is None:
+            self.errors.append(f"Error semántico: La condición del 'for' no es válida. Línea {nodo.linea}")
+            nodo.marcar_error()
+        elif arbol_tipo_dato is None or arbol_tipo_dato != DataType.BOOL:
+            self.errors.append(f"Error semántico: La condición del 'for' debe ser de tipo 'bool'. Línea {nodo.linea}")
+            nodo.marcar_error()
+        
+        # 3. INCREMENTO
+        incremento_nodo = nodo.hijos[2]
+        nodo_incremento = ASTNode("IncrementoFor", valor="", linea=incremento_nodo.linea, columna=incremento_nodo.columna)
+        
+        if incremento_nodo.hijos:
+            for hijo in incremento_nodo.hijos:
+                self.analizar(hijo, nodo_incremento)
+        
+        nodo_for.agregar_hijo(nodo_incremento)
+        
+        # 4. CUERPO
+        cuerpo = nodo.hijos[3]
+        nodo_cuerpo = ASTNode("CuerpoFor", valor="", linea=cuerpo.linea, columna=cuerpo.columna)
+        
+        for hijo in cuerpo.hijos:
+            self.analizar(hijo, nodo_cuerpo)
+        
+        nodo_for.agregar_hijo(nodo_cuerpo)
+        
+        if parent_tree_node is not None:
+            parent_tree_node.agregar_hijo(nodo_for)
+        
+        return nodo_for
+    
     def analizar_cin(self, nodo: ASTNode, parent_tree_node=None):
-        identificador = nodo.hijos[0].valor
-        linea = nodo.hijos[0].linea
-        columna = nodo.hijos[0].columna
+        # Procesar todos los hijos: pueden ser cadenas de mensaje e identificador
         nodo_cin = ASTNode("Cin", valor="", linea=nodo.linea, columna=nodo.columna)
+        
+        identificador = None
+        linea = nodo.linea
+        columna = nodo.columna
+        
+        # Recorrer todos los hijos
+        for hijo in nodo.hijos:
+            if hijo.tipo == "cadena":
+                # Es un mensaje, agregarlo al nodo cin
+                nodo_cadena = ASTNode("cadena", valor=hijo.valor, linea=hijo.linea, columna=hijo.columna)
+                nodo_cin.agregar_hijo(nodo_cadena)
+            elif hijo.tipo == "identificador":
+                # Es el identificador de la variable
+                identificador = hijo.valor
+                linea = hijo.linea
+                columna = hijo.columna
+        
+        # Validar que existe el identificador
+        if not identificador:
+            self.errors.append(f"Error semántico: Se esperaba un identificador en cin. Línea {linea}")
+            nodo.marcar_error()
+            if parent_tree_node is not None:
+                parent_tree_node.agregar_hijo(nodo_cin)
+            return nodo_cin
         
         symbol = self.symbol_table.lookup(identificador)
         if not symbol:
             self.errors.append(f"Error semántico: La variable '{identificador}' no está declarada. Línea {linea}")
-            nodo_id = ASTNode("ID("+identificador+")", valor="", linea=linea, columna=columna)
+            nodo_id = ASTNode("ID("+identificador+")",id=str(identificador), valor="", linea=linea, columna=columna)
             nodo_id.tipo_dato = DataType.UNDEFINED
             nodo_cin.agregar_hijo(nodo_id)
             nodo.marcar_error()
@@ -840,7 +953,7 @@ class SemAnalyzer:
         self.symbol_table.update_lines(identificador, linea)
         symbol.use = True
         
-        nodo_id = ASTNode("ID("+identificador+")", valor="", linea=linea, columna=columna)
+        nodo_id = ASTNode("ID("+identificador+")",id=str(identificador), valor="", linea=linea, columna=columna)
         nodo_id.tipo_dato = symbol.data_type
         nodo_cin.agregar_hijo(nodo_id)
         
@@ -922,53 +1035,3 @@ class SemAnalyzer:
         
         for hijo in nodo.hijos:
             self.agregar_nodo(tree, node_id, hijo)
-
-if __name__ == "__main__":
-    programa = ASTNode("programa")
-    
-    decl1 = ASTNode("declaracion", linea=1, valor="bool")
-    decl1.agregar_hijo(ASTNode("identificador", valor="x,a"))
-    decl1.agregar_hijo(ASTNode("Asignacion"))
-
-    decl2 = ASTNode("declaracion", linea=2, valor="float")
-    decl2.agregar_hijo(ASTNode("identificador", valor="y"))
-    
-    asignacion = ASTNode("Asignacion")
-    asignacion.agregar_hijo(ASTNode("identificador", valor="y",linea=3))
-    expr = ASTNode("operacion", valor="+", linea=3)
-    expr.agregar_hijo(ASTNode("identificador", valor="x",linea=3))
-    expr.agregar_hijo(ASTNode("flotante", valor=5.5))
-    asignacion.agregar_hijo(expr)
-
-    asignacion2 = ASTNode("Asignacion", linea=4)
-    asignacion2.agregar_hijo(ASTNode("identificador", valor="x",linea=4))
-
-    expr2 = ASTNode("operacion", valor="-", linea=4)
-    expr2.agregar_hijo(ASTNode("entero", valor=5, linea=4))
-    op_mult = ASTNode("operacion", valor="*", linea=4)
-    op_mult.agregar_hijo(ASTNode("entero", valor=3, linea=4))
-    op_div = ASTNode("operacion", valor="/", linea=4)
-    op_div.agregar_hijo(ASTNode("entero", valor=8, linea=4))
-    op_div.agregar_hijo(ASTNode("entero", valor=2, linea=4))
-    op_mult.agregar_hijo(op_div)
-    expr2.agregar_hijo(op_mult)
-    asignacion2.agregar_hijo(expr2)
-
-    incremento = ASTNode("Incremento", linea=5)
-    incrementoh = ASTNode("asignacion", linea=5)
-    incrementoh.agregar_hijo(ASTNode("identificador", valor="x",linea=5))
-    inc_expr = ASTNode("operacion", valor="+", linea=5)
-    inc_expr.agregar_hijo(ASTNode("identificador", valor="x",linea=5))
-    inc_expr.agregar_hijo(ASTNode("entero", valor=1,linea=5))
-    incrementoh.agregar_hijo(inc_expr)
-    incremento.agregar_hijo(incrementoh)
-
-    programa.agregar_hijo(decl1)
-    programa.agregar_hijo(decl2)
-    programa.agregar_hijo(asignacion)
-    programa.agregar_hijo(asignacion2)
-    programa.agregar_hijo(incremento)
-
-    analyzer = SemAnalyzer()
-    analyzer.analizar(programa)
-    print(analyzer.report_errors_r())

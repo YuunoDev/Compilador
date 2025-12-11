@@ -1,0 +1,31 @@
+START
+READ N "Ingrese N: "
+i = 1
+PRINT "NUMEROS PERFECTOS IGUALES O MENORES A El NUMERO: " N
+LABEL L1
+t1 = i <= N
+IF_FALSE t1 GOTO L2
+suma = 0
+d = 1
+LABEL L3
+t2 = d < i
+IF_FALSE t2 GOTO L4
+t3 = i % d
+t4 = t3 == 0
+IF_FALSE t4 GOTO L5
+t5 = suma + d
+suma = t5
+LABEL L5
+t6 = d + 1
+d = t6
+GOTO L3
+LABEL L4
+t7 = suma == i
+IF_FALSE t7 GOTO L6
+PRINT i
+LABEL L6
+t8 = i + 1
+i = t8
+GOTO L1
+LABEL L2
+END

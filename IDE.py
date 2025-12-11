@@ -6,13 +6,75 @@ import tkinter as tk
 import threading
 import re
 from tkinter import messagebox
-from Lex.Anlex import *
-from Sin.AnSin import *
-from Sem.AnSem import *
+from Anlex import *
+from AnSin import *
+from AnSem import *
 from Ad_Ex.Exec import *
 import json
 import os
 from Fileamd.File import *
+import generador_codigo as gc
+import mv as VirtualMachine
+from tkinter import simpledialog
+
+# Clase para crear tooltips en Tkinter
+class ToolTip:
+    def __init__(self, widget, text):
+        self.widget = widget
+        self.text = text
+        self.tip = None
+        self.id = None
+        self.x = self.y = 0
+        
+        self.widget.bind("<Enter>", self.on_enter, add="+")
+        self.widget.bind("<Leave>", self.on_leave, add="+")
+        self.widget.bind("<Motion>", self.on_motion, add="+")
+
+    def on_enter(self, event):
+        if self.id:
+            self.widget.after_cancel(self.id)
+        self.id = self.widget.after(500, self.show_tip, event)
+
+    def on_leave(self, event):
+        if self.id:
+            self.widget.after_cancel(self.id)
+            self.id = None
+        self.hide_tip()
+
+    def on_motion(self, event):
+        self.x = event.x_root + 10
+        self.y = event.y_root + 10
+        if self.tip:
+            self.tip.geometry(f"+{self.x}+{self.y}")
+
+    def show_tip(self, event):
+        if self.tip or not self.text:
+            return
+        
+        self.x = event.x_root + 10
+        self.y = event.y_root + 10
+        
+        self.tip = tk.Toplevel(self.widget)
+        self.tip.wm_overrideredirect(True)
+        self.tip.geometry(f"+{self.x}+{self.y}")
+        
+        label = tk.Label(
+            self.tip,
+            text=self.text,
+            background="#ffffe0",
+            foreground="#000000",
+            relief=tk.SOLID,
+            borderwidth=1,
+            padx=5,
+            pady=3,
+            font=("Arial", 9)
+        )
+        label.pack()
+
+    def hide_tip(self):
+        if self.tip:
+            self.tip.destroy()
+            self.tip = None
 
 # Clase para archivo
 FILER = Fileamin()
@@ -21,6 +83,7 @@ DFA = Automata()
 DFAC = Automata()
 # Clase de sematico
 SEM= SemAnalyzer()
+
 
 #Configuración
 CONF = Exec()
@@ -84,6 +147,9 @@ def open_thread():
 
     if ruta_temp:
         FILER.setRuta(ruta_temp)
+        # Guardar la carpeta del archivo abierto
+        carpeta = os.path.dirname(ruta_temp)
+        FILER.save_folder(carpeta)
         leer_archivo(FILER.getRuta())
 
 def leer_archivo(ruta):
@@ -109,18 +175,21 @@ def leer_archivo(ruta):
 
 def guardar():
     """Guarda el archivo en la ruta actual o pide guardarlo si no tiene ruta."""
-    if FILER.getEdit():
-        contenido = texto.get("1.0", "end-1c")
-        try:
-            with open(FILER.getRuta(), "w", encoding="utf-8") as fichero:
-                fichero.write(contenido)
-            mensaje.set("Fichero guardado correctamente")
-            FILER.setEdit(False)
-        except Exception as e:
-            mensaje.set("Error al guardar el fichero")
-            messagebox.showerror("Error", f"No se pudo guardar el archivo:\n{e}")
-    else:
+    contenido = texto.get("1.0", "end-1c")
+    
+    # Si no hay ruta asignada, abre el diálogo guardar como
+    if not FILER.getRuta() or FILER.getRuta() == "":
         guardar_como()
+        return
+    
+    try:
+        with open(FILER.getRuta(), "w", encoding="utf-8") as fichero:
+            fichero.write(contenido)
+        mensaje.set("Fichero guardado correctamente")
+        FILER.setEdit(False)
+    except Exception as e:
+        mensaje.set("Error al guardar el fichero")
+        messagebox.showerror("Error", f"No se pudo guardar el archivo:\n{e}")
 
 def guardar_como():
     """Guarda el archivo con un nuevo nombre."""
@@ -133,6 +202,9 @@ def guardar_como():
 
     if ruta_temp:
         FILER.setRuta(ruta_temp)
+        # Guardar la carpeta del archivo guardado
+        carpeta = os.path.dirname(ruta_temp)
+        FILER.save_folder(carpeta)
         contenido = texto.get("1.0", "end-1c")
         try:
             with open(FILER.getRuta(), "w", encoding="utf-8") as f:
@@ -260,12 +332,28 @@ def debounce_colorText():
         texto.after_cancel(debounce_colorText.after_id)
     debounce_colorText.after_id = texto.after(400, colorText) 
 
+# Función auxiliar para limpiar números de línea
+def clean_instruction(instruction):
+    """Elimina los números de línea del formato '123: instrucción' si existen"""
+    instruction = instruction.strip()
+    if instruction and ': ' in instruction:
+        # Verificar si comienza con números
+        parts = instruction.split(': ', 1)
+        if parts[0].strip().isdigit():
+            return parts[1]  # Retornar solo la instrucción
+    return instruction
+
 # Función para ejecutar el código
-def ejecutar_codigo():
+def ejecutar_codigo(modo):
     """
     Función que ejecuta el código ingresado.
+    Modos disponibles:
+    - 'compilar': Solo compila (análisis léxico, sintáctico y semántico)
+    - 'ejecutar': Solo ejecuta (requiere que ya esté compilado)
+    - 'compilar_ejecutar': Compila y ejecuta
     """
-    ejecutar = threading.Thread(target=thread_ejecutar)
+    CONF.setModo(modo)
+    ejecutar = threading.Thread(target=thread_ejecutar, daemon=True)
     ejecutar.start()
 
 def archivo_erroresSintacticos(errores):
@@ -292,7 +380,7 @@ def cargar_arbol(ast: ASTNode, errores: List[Error]):
         terminalsin.config(state="normal")
         terminalsin.delete("1.0", tk.END)
         terminalsin.insert(tk.END, "¡No se encontraron errores! ✓", "success")
-        terminalsin.tag_configure("success", foreground="green")
+        terminalsin.tag_configure("success", foreground="white")
         terminalsin.config(state="disabled")
 
     # Mostrar estadísticas
@@ -355,33 +443,287 @@ def preparar_arbol():
         
 
 def ejecución_sem(ast: ASTNode):
-    #print("analisis sem")
-    SEM.analizar(ast)
-    #Tablas
-    terminalej.config(state="normal")
-    terminalej.insert(tk.END, SEM.symbol_table.display_r())
-    terminalej.config(state="disabled")
+    
+        SEM.analizar(ast)
+        
+        #Tablas
+        terminaltab.delete(*terminaltab.get_children())  # limpiar primero
+        symbols = SEM.symbol_table.display_r()
 
-    #arbol semantico
-    terminalse.delete(*terminalse.get_children())  # Limpiar el árbol
-    SEM.agregar_nodo(terminalse, '', SEM.tree)
+        for entry in symbols:
+            terminaltab.insert(
+                "",
+                "end",
+                text=entry["nombre"], 
+                values=(entry["tipo"], entry["valor"], entry["usada"], entry["lineas"])
+        )
+            
+         #arbol semantico
+        terminalse.delete(*terminalse.get_children())  # Limpiar el árbol
+        SEM.agregar_nodo(terminalse, '', SEM.tree)
 
-    #errores
-    terminalsem.config(state="normal")
-    terminalsem.delete("1.0", tk.END)
-    terminalsem.config(state="normal")
-    terminalsem.insert(tk.END, SEM.report_errors_r())
-    terminalsem.config(state="disabled")      
+        #errores
+        if SEM.errors:
+            terminalsem.config(state="normal")
+            terminalsem.delete("1.0", tk.END)
+            for i, error in enumerate(SEM.errors, 1):
+                # Manejar tanto strings como objetos Error
+                if isinstance(error, str):
+                    tag = "error"
+                    error_text = error
+                else:
+                    tag = error.tipo.name.lower()
+                    error_text = str(error)
+                terminalsem.insert(tk.END, f"{i}. {error_text}\n", tag)
+            terminalsem.config(state="disabled")
+        else:
+            terminalsem.config(state="normal")
+            terminalsem.delete("1.0", tk.END)
+            terminalsem.insert(tk.END, "¡No se encontraron errores semánticos! ✓", "success")
+            # no se ve el
+            terminalsem.tag_configure("success", foreground="white")
+            terminalsem.config(state="disabled")
+
+        # Generar código intermedio SIEMPRE (independientemente del modo)
+        # El modo controla si se ejecuta o no
+        exe_ci_debug(SEM.tree)
+
+
+# Variable global para controlar la ejecución
+vm_running = False
+vm_instance = None
+
+def exe_ci_debug(ast: ASTNode):
+    """Genera código intermedio, lo guarda en un archivo y prepara la ejecución CON DEBUG"""
+    global vm_instance
+    
+    try:
+        # Generar código intermedio
+        generator = gc.IntermediateCodeGenerator()
+        code = generator.generate(ast)
+        
+        print("\n=== CÓDIGO INTERMEDIO GENERADO ===")
+        for i, instruction in enumerate(code, 1):
+            print(f"{i:3d}: {instruction}")
+        print("="*50)
+        
+        # Obtener la ruta del archivo actual
+        ruta_archivo = FILER.getRuta()
+        
+        # Determinar la ruta para guardar el código intermedio
+        if ruta_archivo and ruta_archivo != "":
+            # Si hay un archivo abierto, guardar en la misma carpeta con el mismo nombre
+            import os
+            carpeta = os.path.dirname(ruta_archivo)  # Obtener la carpeta
+            nombre_archivo = os.path.splitext(os.path.basename(ruta_archivo))[0]  # Nombre sin extensión
+            archivo_ci = os.path.join(carpeta, f"{nombre_archivo}.ci")  # Extensión .ci
+        else:
+            # Si no hay archivo abierto, usar la ruta por defecto
+            archivo_ci = "codigo_intermedio.ci"
+        
+        # Guardar código intermedio SIN números
+        with open(archivo_ci, "w", encoding="utf-8") as f:
+            for instruction in code:
+                f.write(f"{instruction}\n")
+        
+        mensaje.set(f"Código intermedio guardado en '{archivo_ci}'")
+        
+        # Verificar el modo de ejecución
+        modo = CONF.getModo()
+        
+        if modo == 'compilar':
+            # Solo compilar, no ejecutar
+            terminalej.config(state="normal")
+            terminalej.delete("1.0", tk.END)
+            terminalej.insert(tk.END, "=== COMPILACIÓN COMPLETADA ===\n")
+            terminalej.insert(tk.END, f"\nCódigo intermedio generado y guardado en:\n{archivo_ci}\n")
+            terminalej.config(state="disabled")
+            mensaje.set("Compilación completada exitosamente")
+        else:
+            # Compilar y ejecutar o solo ejecutar
+            # Limpiar terminal antes de ejecutar
+            terminalej.config(state="normal")
+            terminalej.delete("1.0", tk.END)
+            terminalej.insert(tk.END, "=== EJECUTANDO CÓDIGO ===\n\n")
+            terminalej.config(state="disabled")
+            
+            # Guardar la ruta del archivo CI para usarla en la ejecución
+            ejecutar_maquina_virtual_debug(code, archivo_ci)  
+    except Exception as e:
+        terminalej.config(state="normal")
+        terminalej.insert(tk.END, f"\n❌ Error durante la generación: {str(e)}\n")
+        terminalej.config(state="disabled")
+        mensaje.set(f"Error: {str(e)}")
+        print(f"Error completo: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+# También agrega esta versión de debug de la máquina virtual
+def ejecutar_maquina_virtual_debug(code, archivo_ci="codigo_intermedio.ci"):
+    """Ejecuta la máquina virtual con DEBUG completo usando el archivo de código intermedio"""
+    global vm_running, vm_instance
+    
+    def gui_output(text):
+        """Maneja salida a la terminal de ejecución"""
+        try:
+            terminalej.config(state="normal")
+            terminalej.insert(tk.END, text)
+            terminalej.see(tk.END)
+            terminalej.config(state="disabled")
+            root.update_idletasks()
+        except Exception as e:
+            print(f"Error en output: {e}")
+    
+    def gui_input(prompt):
+        """Maneja entrada de usuario desde GUI"""
+        try:
+            gui_output(prompt + " ")
+            
+            input_dialog = tk.Toplevel(root)
+            input_dialog.title("Entrada de datos")
+            input_dialog.geometry("400x150")
+            input_dialog.transient(root)
+            input_dialog.grab_set()
+            
+            input_dialog.update_idletasks()
+            x = (root.winfo_screenwidth() // 2) - (400 // 2)
+            y = (root.winfo_screenheight() // 2) - (150 // 2)
+            input_dialog.geometry(f"+{x}+{y}")
+            
+            label = tk.Label(input_dialog, text=prompt, font=("Arial", 11))
+            label.pack(pady=10)
+            
+            entry_var = tk.StringVar()
+            entry = tk.Entry(input_dialog, textvariable=entry_var, font=("Arial", 12), width=30)
+            entry.pack(pady=10)
+            entry.focus_set()
+            
+            result = {"value": None, "submitted": False}
+            
+            def on_submit():
+                result["value"] = entry_var.get()
+                result["submitted"] = True
+                input_dialog.destroy()
+            
+            def on_cancel():
+                result["submitted"] = False
+                input_dialog.destroy()
+            
+            button_frame = tk.Frame(input_dialog)
+            button_frame.pack(pady=10)
+            
+            ok_button = tk.Button(button_frame, text="Aceptar", command=on_submit, 
+                                 width=10, bg="#4CAF50", fg="white")
+            ok_button.pack(side="left", padx=5)
+            
+            cancel_button = tk.Button(button_frame, text="Cancelar", command=on_cancel,
+                                     width=10, bg="#f44336", fg="white")
+            cancel_button.pack(side="left", padx=5)
+            
+            entry.bind("<Return>", lambda e: on_submit())
+            entry.bind("<Escape>", lambda e: on_cancel())
+            
+            input_dialog.wait_window()
+            
+            if not result["submitted"]:
+                raise Exception("Entrada cancelada por el usuario.")
+            
+            gui_output(result["value"] + "\n")
+            return result["value"]
+            
+        except Exception as e:
+            gui_output(f"\n❌ Error en entrada: {str(e)}\n")
+            raise e
+    
+    try:
+        vm_instance = VirtualMachine.VirtualMachine(
+            input_handler=gui_input,
+            output_handler=gui_output
+        )
+        
+        vm_running = True
+        
+        # Usar el método run() que hace pre-escaneo de etiquetas antes de ejecutar
+        vm_instance.run(code)
+        
+        # terminalej.config(state="normal")
+        # terminalej.insert(tk.END, "\n=== EJECUCIÓN COMPLETADA ===\n")
+        # terminalej.insert(tk.END, f"\nEstado final de memoria: {vm_instance.memory}\n")
+        # terminalej.config(state="disabled")
+        
+        mensaje.set("Ejecución completada exitosamente")
+        vm_running = False
+        
+    except Exception as e:
+        terminalej.config(state="normal")
+        terminalej.insert(tk.END, f"\n\n❌ Error en tiempo de ejecución: {str(e)}\n")
+        terminalej.config(state="disabled")
+        mensaje.set(f"Error en ejecución: {str(e)}")
+        vm_running = False
+        print(f"Error completo: {e}")
 
 def thread_ejecutar():
     """
     Función que simula la ejecución del código ingresado.
+    Verifica el modo de ejecución y actúa en consecuencia.
     """
+    modo = CONF.getModo()
+    
+    # Si el modo es solo "ejecutar", verificar que exista compilación previa
+    if modo == 'ejecutar':
+        # Determinar la ruta del archivo compilado
+        ruta_archivo = FILER.getRuta()
+        
+        if ruta_archivo and ruta_archivo != "":
+            # Si hay un archivo abierto, buscar en la misma carpeta con el mismo nombre
+            carpeta = os.path.dirname(ruta_archivo)
+            nombre_archivo = os.path.splitext(os.path.basename(ruta_archivo))[0]
+            archivo_ci = os.path.join(carpeta, f"{nombre_archivo}.ci")
+        else:
+            # Si no hay archivo abierto, usar la ruta por defecto
+            archivo_ci = "codigo_intermedio.ci"
+        
+        if not os.path.exists(archivo_ci):
+            terminalej.config(state="normal")
+            terminalej.delete("1.0", END)
+            terminalej.insert(END, "❌ ERROR: No hay código compilado.\n")
+            terminalej.insert(END, "\nDebes compilar primero usando:\n")
+            terminalej.insert(END, "  • Botón 'Compilar' (Ctrl+Shift+C)\n")
+            terminalej.insert(END, "  • Botón 'Compilar y Ejecutar' (Ctrl+R)\n")
+            terminalej.insert(END, "  • Menú 'Ejecutar' > 'Compilar y Ejecutar'\n")
+            terminalej.config(state="disabled")
+            mensaje.set("Error: Se requiere compilar el código primero")
+            return
+        # Si existe el archivo compilado, ejecutar directamente sin compilar
+        else:
+            terminalej.config(state="normal")
+            terminalej.delete("1.0", END)
+            terminalej.insert(END, "Ejecutando código compilado...\n")
+            terminalej.config(state="disabled")
+            mensaje.set("Ejecutando código compilado...")
+            
+            try:
+                with open(archivo_ci, "r", encoding="utf-8") as f:
+                    code = f.readlines()
+                # Ejecutar la máquina virtual
+                ejecutar_maquina_virtual_debug(code, archivo_ci)
+            except Exception as e:
+                terminalej.config(state="normal")
+                terminalej.insert(tk.END, f"\n❌ Error al ejecutar: {str(e)}\n")
+                terminalej.config(state="disabled")
+                mensaje.set(f"Error: {str(e)}")
+            return
+    
+    # Si el modo es "compilar" o "compilar_ejecutar", hacer la compilación completa
     contenido = texto.get("1.0", 'end-1c')  # Obtiene el contenido del editor
     if contenido.strip() == "":
         mensaje.set("No hay código para ejecutar")
         return  
     else:
+        # guardar el codigo 
+        guardar()
+
         # Limpiar las terminales
         terminalex.config(state="normal")
         terminalex.delete("1.0", END)
@@ -399,10 +741,10 @@ def thread_ejecutar():
         # Terminal de ejecución
         terminalej.config(state="normal")
         terminalej.delete("1.0", END)
-        terminalej.insert(END, "Ejecutando código...\n")
+        terminalej.insert(END, "Analizando código...\n")
         terminalej.config(state="disabled")
 
-        mensaje.set("Ejecutando código...")
+        mensaje.set("Analizando código...")
         
         DFA.process(contenido)  # Establece el texto en el analizador léxico
         DFA.genarcherrores("errores.tk")  # Generar archivo de errores
@@ -412,9 +754,6 @@ def thread_ejecutar():
             terminalex.config(state="normal")
             terminalex.insert(END, f"{token[1]:<20} {token[0]:<18} (línea {token[2]}, columna {token[3]})\n")
 
-        # print("\nErrores:")
-        # for error in DFA.errors:
-        #    print(error)
         if DFA.errors:
             terminalerlex.config(state="normal")
             terminalerlex.insert(END, "Errores encontrados:\n")
@@ -427,9 +766,8 @@ def thread_ejecutar():
             terminalerlex.insert(END, "¡No se encontraron errores! ✓\n")
             terminalerlex.config(state="disabled")
 
-         # Si el archivo existe, lo eliminamos
+        # Si el archivo existe, lo eliminamos
         if os.path.exists("token.tk"):
-            #print("El archivo ya existe, se eliminará.")
             os.remove("token.tk")
 
         DFA.genarch("token.tk")  # Genera el archivo de tokens
@@ -439,7 +777,6 @@ def thread_ejecutar():
 
         # Preparar el árbol de sintaxis
         preparar_arbol()
-        
 
 # Función para mostrar la posición del cursor
 def show_cursor_position(event):
@@ -465,6 +802,13 @@ def on_key_release(event):
     """Maneja tanto la actualización de la posición del cursor como el coloreado del texto."""
     show_cursor_position(event)
     debounce_colorText()
+
+def on_key_press(event):
+    """Maneja la pulsación de teclas especiales como Tab."""
+    if event.keysym == 'Tab':
+        # Insertar 4 espacios en lugar de un tabulador
+        texto.insert(INSERT, "    ")
+        return 'break'  # Evitar que se procese el Tab por defecto
 
 def confex():
     pass
@@ -498,8 +842,14 @@ filemenu.add_separator()
 filemenu.add_command(label="Salir   Ctrl+w", command=root.quit)
 menubar.add_cascade(menu=filemenu, label="Archivo")
 menubar.add_separator()
-menubar.add_checkbutton(label="Ejecutar", command=ejecutar_codigo)
-menubar.add_separator()
+
+# Menú de Ejecución
+ejemenu = Menu(menubar, tearoff=0)
+ejemenu.add_command(label="Compilar (Ctrl+Shift+C)", command=lambda: ejecutar_codigo('compilar'))
+ejemenu.add_command(label="Ejecutar - Requiere compilar primero (Ctrl+E)", command=lambda: ejecutar_codigo('ejecutar'))
+ejemenu.add_separator()
+ejemenu.add_command(label="Compilar y Ejecutar (Ctrl+R)", command=lambda: ejecutar_codigo('compilar_ejecutar'))
+menubar.add_cascade(menu=ejemenu, label="Ejecutar")
 
 Configmenu= Menu(menubar, tearoff=0)
 Configmenu.add_command(label="Color texto", command=colortexto)
@@ -509,6 +859,7 @@ menubar.add_cascade(menu=Configmenu, label="Configuración")
 # Menú superior
 menubar.config(bg="#2d2d2d", fg="#d4d4d4")
 filemenu.config(bg="#2d2d2d", fg="#d4d4d4", activebackground="#3c3c3c", activeforeground="#d4d4d4")
+ejemenu.config(bg="#2d2d2d", fg="#d4d4d4", activebackground="#3c3c3c", activeforeground="#d4d4d4")
 Configmenu.config(bg="#2d2d2d", fg="#d4d4d4", activebackground="#3c3c3c", activeforeground="#d4d4d4")
 root.config(menu=menubar)
 
@@ -522,26 +873,44 @@ nuevo_icon = PhotoImage(file="icons/nuevo.png")
 nuevo_icon = nuevo_icon.subsample(20, 20)
 nuevo_btn = Button(iconbar, image=nuevo_icon, command=nuevo, bg="#999999", activebackground="#3c3c3c")
 nuevo_btn.pack(side="left", padx=5, pady=5)
+ToolTip(nuevo_btn, "Crear nuevo archivo (Ctrl+N)")
 
 abrir_icon = PhotoImage(file="icons/abrir.png")
 abrir_icon = abrir_icon.subsample(20, 20)
 abrir_btn = Button(iconbar, image=abrir_icon, command=abrir, bg="#999999", activebackground="#3c3c3c")
 abrir_btn.pack(side="left", padx=5, pady=5)
+ToolTip(abrir_btn, "Abrir archivo (Ctrl+O)")
 
 guardar_icon = PhotoImage(file="icons/guardar.png")
 guardar_icon = guardar_icon.subsample(20, 20)
 guardar_btn = Button(iconbar, image=guardar_icon, command=guardar, bg="#999999", activebackground="#3c3c3c")
 guardar_btn.pack(side="left", padx=5, pady=5)
+ToolTip(guardar_btn, "Guardar archivo (Ctrl+S)")
 
 guardar_como_icon = PhotoImage(file="icons/guardar_como.png")
 guardar_como_icon = guardar_como_icon.subsample(20, 20)
 guardar_como_btn = Button(iconbar, image=guardar_como_icon, command=guardar_como, bg="#999999", activebackground="#3c3c3c")
 guardar_como_btn.pack(side="left", padx=5, pady=5)
+ToolTip(guardar_como_btn, "Guardar como... (Ctrl+G)")
 
 compilar_icon = PhotoImage(file="icons/compile.png")
 compilar_icon = compilar_icon.subsample(20, 20)
-compilar_btn = Button(iconbar, image=compilar_icon, command=ejecutar_codigo, bg="#999999", activebackground="#3c3c3c")
+compilar_btn = Button(iconbar, image=compilar_icon, command=lambda: ejecutar_codigo('compilar'), bg="#999999", activebackground="#3c3c3c")
 compilar_btn.pack(side="left", padx=5, pady=5)
+ToolTip(compilar_btn, "Compilar código (Ctrl+Shift+C)")
+
+ejecutar_icon = PhotoImage(file="icons/run.png")
+ejecutar_icon = ejecutar_icon.subsample(20, 20)
+ejecutar_btn = Button(iconbar, image=ejecutar_icon, command=lambda: ejecutar_codigo('ejecutar'), bg="#999999", activebackground="#3c3c3c")
+ejecutar_btn.pack(side="left", padx=5, pady=5)
+ToolTip(ejecutar_btn, "Ejecutar código compilado (Ctrl+E)\n⚠️ Requiere compilar primero")
+
+ejecom_icon = PhotoImage(file="icons/eje_comp.png")
+ejecom_icon = ejecom_icon.subsample(20, 20)
+ejecom_btn = Button(iconbar, image=ejecom_icon, command=lambda: ejecutar_codigo('compilar_ejecutar'), bg="#999999", activebackground="#3c3c3c")
+ejecom_btn.pack(side="left", padx=5, pady=5)
+ToolTip(ejecom_btn, "Compilar y ejecutar código (Ctrl+R)")
+
 
 # divicion
 mainpanel = ttk.PanedWindow(root, orient=tk.VERTICAL)
@@ -551,6 +920,26 @@ mainpanel.pack(fill="both", expand=True)
 toppanel = ttk.PanedWindow(mainpanel, orient=tk.HORIZONTAL)
 mainpanel.add(toppanel, weight=1)
 
+# Crear estilo para la tabla
+style = ttk.Style()
+style.theme_use('default')
+
+# Configurar colores y altura de filas para Treeview
+style.configure("Treeview",
+                background="#2e2e2e",
+                foreground="white",
+                fieldbackground="#2e2e2e",
+                rowheight=30,  # Aumentar la altura de las filas
+                font=('Arial', 10))  # Fuente para el contenido
+
+# Configurar los encabezados
+style.configure("Treeview.Heading",
+                background="#3e3e3e",
+                foreground="white",
+                font=('Arial', 11, 'bold'))
+
+# Cambiar color de la fila seleccionada
+style.map('Treeview', background=[('selected', '#4e4e4e')])
 
 # Frame para contener el área de texto y los números de línea
 frame = Frame(toppanel, bg="#1e1e1e")
@@ -564,9 +953,11 @@ lineas.pack(side="left", fill="y")
 # Colores para la barra de números de línea
 lineas.config(bg="#2d2d2d", fg="#d4d4d4")
 # Widget de texto principal
-texto = Text(frame, bd=0, padx=6, pady=4, font=("Consolas", 12), undo=True,  wrap="none")
+texto = Text(frame, bd=0, padx=6, pady=4, font=("Consolas", 12), undo=True, wrap="none", tabs=("4c",))
 # Colores para el área de texto principal
 texto.config(bg="#1e1e1e", fg="#d4d4d4", insertbackground="#d4d4d4")
+# Configurar el espaciado de tabuladores (4 espacios)
+texto.config(highlightthickness=0)  # Eliminar borde de enfoque
 # Añadir el widget de texto al frame
 texto.pack(side="left", fill="both", expand=True)
 # Scrollbar para sincronizar el desplazamiento
@@ -652,6 +1043,36 @@ frame_terminalse.grid_columnconfigure(0, weight=1)
 notebook_terminal.add(frame_terminalse, text="Terminal Semántica Árbol")
 toppanel.add(frame_terminal, weight=1)
 
+# Tabla para símbolos
+frame_simbtable = Frame(notebook_terminal, bg="#1e1e1e")
+terminaltab = ttk.Treeview(frame_simbtable, columns=("Tipo","Valor","Usada","Linea"), show="tree headings")
+
+# Encabezados
+terminaltab.heading("#0", text="Variable")
+terminaltab.heading("Tipo", text="Tipo")
+terminaltab.heading("Valor", text="Valor")
+terminaltab.heading("Usada", text="Usada")
+terminaltab.heading("Linea", text="Linea")
+
+# Ajustes de columnas
+terminaltab.column("#0", width=100, anchor="center")
+terminaltab.column("Tipo", width=100, anchor="center")
+terminaltab.column("Valor", width=100, anchor="center")
+terminaltab.column("Usada", width=50, anchor="center")
+terminaltab.column("Linea", width=300, anchor="w")
+
+# Scroll
+scrollbar_tab = ttk.Scrollbar(frame_simbtable, orient="vertical", command=terminaltab.yview)
+terminaltab.configure(yscrollcommand=scrollbar_tab.set)
+
+terminaltab.grid(row=0, column=0, sticky="nsew")
+scrollbar_tab.grid(row=0, column=1, sticky="ns")
+
+frame_simbtable.grid_rowconfigure(0, weight=1)
+frame_simbtable.grid_columnconfigure(0, weight=1)
+
+notebook_terminal.add(frame_simbtable, text="Tabla de simbolos")
+
 # Contenedor de ventanas (Notebook)
 notebook = ttk.Notebook(root, style="Custom.TNotebook")
 notebook.pack(fill="both", expand=True, pady=(4, 0))
@@ -692,6 +1113,7 @@ mainpanel.add(notebook, weight=2)
 texto.bind("<<Modified>>", on_text_change)
 texto.bind("<KeyRelease>", on_key_release)
 texto.bind("<Button-1>", show_cursor_position)
+texto.bind("<KeyPress>", on_key_press)  # Manejar Tab como 4 espacios
 
 #combinaciones de teclas
 root.bind("<Control-n>", lambda e: nuevo())
@@ -700,8 +1122,11 @@ root.bind("<Control-s>", lambda e: guardar())
 root.bind("<Control-g>", lambda e: guardar_como())
 root.bind("<Control-w>", lambda e: exit())
 
-# Tecla rápida para ejecutar el código
-root.bind("<Control-e>", lambda e: ejecutar_codigo())
+# Tecla rápida para compilar y ejecutar el código
+root.bind("<Control-e>", lambda e: ejecutar_codigo('compilar_ejecutar'))
+
+# Tecla rápida para solo compilar
+root.bind("<Control-Shift-C>", lambda e: ejecutar_codigo('compilar'))
 
 # Barra de estado
 status_frame = Frame(root, bg="#2d2d2d", height=25)

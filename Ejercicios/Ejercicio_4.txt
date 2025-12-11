@@ -1,0 +1,25 @@
+main{
+    int N;
+    cin >> "Ingrese N: " >>N;
+   
+    int i = 1;
+    cout << "NUMEROS PERFECTOS IGUALES O MENORES A El NUMERO: " <<N;
+    while (i <= N) {
+        int suma = 0;
+        int d = 1;
+
+        while (d < i) {
+            if (i % d == 0) 
+                suma = suma + d;
+            end
+            d = d + 1;
+        }
+
+        if (suma == i) 
+            cout << i;
+        end
+
+        i = i + 1;
+    }
+    
+}

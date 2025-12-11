@@ -13,7 +13,7 @@ class Automata:
         self.position = 0
         self.line = 1
         self.column = 0
-        self.reserved = ["print","if", "else", "while", "end", "do", "int", "float","main", "cin", "cout", "string", "bool", "True", "False","true","false", "return", "void", "break", "continue", "for", "foreach","delete", "this","until"]
+        self.reserved = ["print","if", "else", "while", "endwhile", "end", "do", "int", "float","main", "cin", "cout", "string", "bool", "True", "False","true","false", "return", "void", "break", "continue", "for", "foreach","delete", "this","until"]
         self.errors = []
         self.columncomment = 0
         self.linecomment = 0
@@ -196,7 +196,7 @@ class Automata:
                     continue  # << Volver a procesar el mismo caracter
 
             elif self.state == 2:  # identificador
-                if re.match(r"[a-zA-Z]", char) or char.isdigit():
+                if re.match(r"[a-zA-Z]", char) or char.isdigit() or char == "_":
                     self.andChar(char)
                 else:
                     self.addTokens()
@@ -393,10 +393,15 @@ class Automata:
                 if char == "\"":
                     self.state = 19
                     self.andChar(char)
-                elif char in [" ","\n"]:
-                    self.andChar(char)
-                elif re.match(r"[a-zA-Z]", char) or char.isdigit():
-                    self.andChar(char)
+                else:
+                    # Aceptar CUALQUIER carácter dentro de las comillas (menos salto de línea sin escape)
+                    if char != "\n":
+                        self.andChar(char)
+                    else:
+                        # Si hay salto de línea sin cerrar, es error
+                        self.error(1)
+                        self.state = 16
+                        continue
                 
             elif self.state == 19:
                 self.state = 18

@@ -1,0 +1,30 @@
+main {
+/*Dado como datos tres números reales, identifique cuál es el mayor. 
+Considere que los números pueden ser iguales*/
+
+    int a,b,c;
+
+    cin >> "Dame primer numero: " >> a;
+    cin >> "Dame segundo numero: " >> b;
+    cin >> "Dame tercer numero: " >> c;
+    
+    if (a==b && b==c)
+        cout << "los numeros son iguales" << c;
+    else if (a>=b && a>=c)
+         if (a==b)
+            cout << "El primer numero y el segundo son los mayores: " << a;
+         else if (a==c)
+            cout << "El primer numero y el tercero son los mayores: " << a;
+         else
+            cout << "El primer numero es el mayor: " << a;
+         end
+    else if (b>=a && b>=c)
+        if(b==c)
+            cout << "El segundo numero y el tercero numero son los mayores: " << b;
+        else
+            cout << "El segundo numero es el mayor: " << b;
+        end
+    else
+        cout << "El tercero numero es el mayor: " << c;
+    end
+}

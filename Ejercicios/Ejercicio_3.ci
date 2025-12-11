@@ -1,0 +1,48 @@
+START
+READ a "Dame primer numero: "
+READ b "Dame segundo numero: "
+READ c "Dame tercer numero: "
+t1 = a == b
+t2 = b == c
+t3 = t1 && t2
+IF_FALSE t3 GOTO L1
+PRINT "los numeros son iguales" c
+GOTO L2
+LABEL L1
+t4 = a >= b
+t5 = a >= c
+t6 = t4 && t5
+IF_FALSE t6 GOTO L3
+t7 = a == b
+IF_FALSE t7 GOTO L4
+PRINT "El primer numero y el segundo son los mayores: " a
+GOTO L5
+LABEL L4
+t8 = a == c
+IF_FALSE t8 GOTO L6
+PRINT "El primer numero y el tercero son los mayores: " a
+GOTO L7
+LABEL L6
+PRINT "El primer numero es el mayor: " a
+LABEL L7
+LABEL L5
+GOTO L8
+LABEL L3
+t9 = b >= a
+t10 = b >= c
+t11 = t9 && t10
+IF_FALSE t11 GOTO L9
+t12 = b == c
+IF_FALSE t12 GOTO L10
+PRINT "El segundo numero y el tercero numero son los mayores: " b
+GOTO L11
+LABEL L10
+PRINT "El segundo numero es el mayor: " b
+LABEL L11
+GOTO L12
+LABEL L9
+PRINT "El tercero numero es el mayor: " c
+LABEL L12
+LABEL L8
+LABEL L2
+END
