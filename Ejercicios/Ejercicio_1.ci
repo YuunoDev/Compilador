@@ -1,13 +1,11 @@
 START
-b = a
-READ b "Dame la base: "
-READ a "Dame la altura: "
-per = area
+READ b "Dame la base: " int
+READ a "Dame la altura: " int
 t1 = b + a
 t2 = 2 * t1
-per = t2
+per = TO_INT t2
 t3 = b * a
-area = t3
+area = TO_INT t3
 PRINT ""
 PRINT "RESULTADOS:"
 PRINT "Area: " area

@@ -950,6 +950,15 @@ class SemAnalyzer:
             return nodo_cin
         
         symbol.is_initialized = True
+        # colocar valor por defecto segun el tipo
+        if symbol.data_type == DataType.INT:
+            symbol.value = 0
+        elif symbol.data_type == DataType.FLOAT:
+            symbol.value = 0.0
+        elif symbol.data_type == DataType.STRING:
+            symbol.value = ""
+        elif symbol.data_type == DataType.BOOL:
+            symbol.value = False
         self.symbol_table.update_lines(identificador, linea)
         symbol.use = True
         

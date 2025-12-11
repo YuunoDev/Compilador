@@ -1,8 +1,6 @@
 START
-categoria = sueldo
-aumento = sueldo_nuevo
-READ categoria "Dame la categoria del trabajador: "
-READ sueldo "Dame el sueldo del trabajador: "
+READ categoria "Dame la categoria del trabajador: " [INT]
+READ sueldo "Dame el sueldo del trabajador: " [INT]
 t1 = categoria == 1
 IF_FALSE t1 GOTO L1
 t2 = sueldo * 15

@@ -486,26 +486,33 @@ def ejecución_sem(ast: ASTNode):
 
         # Generar código intermedio SIEMPRE (independientemente del modo)
         # El modo controla si se ejecuta o no
-        exe_ci_debug(SEM.tree)
+        exe_ci_debug(SEM.tree, SEM.symbol_table)
 
 
 # Variable global para controlar la ejecución
 vm_running = False
 vm_instance = None
 
-def exe_ci_debug(ast: ASTNode):
+def exe_ci_debug(ast: ASTNode, tabla_simbolos=None):
     """Genera código intermedio, lo guarda en un archivo y prepara la ejecución CON DEBUG"""
     global vm_instance
     
     try:
         # Generar código intermedio
         generator = gc.IntermediateCodeGenerator()
-        code = generator.generate(ast)
+        code = generator.generate(ast,tabla_simbolos)
         
-        print("\n=== CÓDIGO INTERMEDIO GENERADO ===")
+        # print("\n=== CÓDIGO INTERMEDIO GENERADO ===")
+        # for i, instruction in enumerate(code, 1):
+        #     print(f"{i:3d}: {instruction}")
+        # print("="*50)
+
+        # mosatrar en su terminal
+        terminalci.config(state="normal")
+        terminalci.delete("1.0", tk.END)
         for i, instruction in enumerate(code, 1):
-            print(f"{i:3d}: {instruction}")
-        print("="*50)
+            terminalci.insert(tk.END, f"{i:3d}: {instruction}\n")
+        terminalci.config(state="disabled")
         
         # Obtener la ruta del archivo actual
         ruta_archivo = FILER.getRuta()
@@ -1072,6 +1079,15 @@ frame_simbtable.grid_rowconfigure(0, weight=1)
 frame_simbtable.grid_columnconfigure(0, weight=1)
 
 notebook_terminal.add(frame_simbtable, text="Tabla de simbolos")
+
+# Codigo intermedio
+frame_ci = Frame(notebook_terminal, bg="#1e1e1e")
+terminalci = Text(frame_ci, height=5, bg="#1e1e1e", fg="#d4d4d4")
+terminalci.pack(fill="both", expand=True)
+terminalci.config(state="disabled")
+notebook_terminal.add(frame_ci, text="Código Intermedio")
+
+
 
 # Contenedor de ventanas (Notebook)
 notebook = ttk.Notebook(root, style="Custom.TNotebook")

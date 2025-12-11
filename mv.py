@@ -3,7 +3,7 @@ class VirtualMachine:
         self.memory = {}
         self.instructions = []
         self.labels = {}
-        self.pc = 0 # Program Counter
+        self.pc = 0
         self.input_handler = input_handler
         self.output_handler = output_handler
 
@@ -14,15 +14,13 @@ class VirtualMachine:
         self.pc = 0
         self.labels = {}
         
-        # 2. Pre-escaneo de etiquetas (ANTES de ejecutar nada)
+        # 2. Pre-escaneo de etiquetas
         for i, line in enumerate(self.instructions):
             if line.startswith("LABEL "):
                 parts = line.split()
                 if len(parts) >= 2:
                     label_name = parts[1]
                     self.labels[label_name] = i
-                    # Debug: mostrar etiquetas encontradas
-                    print(f"DEBUG: Etiqueta '{label_name}' en índice {i}")
 
         # 3. Ciclo de ejecución
         while self.pc < len(self.instructions):
@@ -46,26 +44,20 @@ class VirtualMachine:
         if val_str.lower() == "false":
             return False
             
-        # Literal Numérico (intentar primero antes de buscar en memoria)
+        # Literal Numérico
         try:
-            # Verificar si tiene punto decimal
             if '.' in val_str:
                 return float(val_str)
-            # Verificar si es un número entero (positivo o negativo)
-            # Usar isdigit() después de quitar el signo
             clean_val = val_str.lstrip('-+')
             if clean_val.isdigit():
                 return int(val_str)
         except (ValueError, AttributeError):
             pass
             
-        # Variable (incluye temporales como t1, t2, etc.)
+        # Variable (incluye temporales)
         if val_str in self.memory:
             return self.memory[val_str]
         
-        # Si es una variable que no existe, retornar 0 por defecto
-        # (esto puede pasar con variables no inicializadas)
-        # Pero mostrar advertencia
         print(f"Advertencia: Variable '{val_str}' no encontrada en memoria, usando 0")
         return 0
         
@@ -76,11 +68,8 @@ class VirtualMachine:
 
         # --- SALIDA ---
         if line.startswith("PRINT "):
-            # Formato: PRINT <valor1> <valor2> <valor3> ...
-            # Ejemplo: PRINT "Hola" x "mundo" t1
             content = line[6:].strip()
             
-            # Procesar argumentos respetando cadenas entre comillas
             parts = []
             current = ""
             in_string = False
@@ -99,11 +88,9 @@ class VirtualMachine:
             if current.strip():
                 parts.append(current.strip())
             
-            # Procesar cada parte y concatenar en una sola línea
             output = ""
             for part in parts:
                 val = self.get_value(part)
-                # Si es un número float que termina en .0, mostrarlo como entero
                 if isinstance(val, float) and val.is_integer():
                     val = int(val)
                 output += str(val)
@@ -114,15 +101,14 @@ class VirtualMachine:
 
         # --- ENTRADA ---
         if line.startswith("READ "):
-            # Formato: READ <variable> [mensaje opcional]
-            # Ejemplo: READ x o READ x "Ingrese x: "
+            # READ var_name [mensaje] [tipo]
             content = line[5:].strip()
-            
-            # Dividir por espacios, respetando cadenas entre comillas
+
+            # --- PARSER para dividir respetando strings ---
             parts = []
             current = ""
             in_string = False
-            
+
             for char in content:
                 if char == '"':
                     in_string = not in_string
@@ -133,41 +119,74 @@ class VirtualMachine:
                     current = ""
                 else:
                     current += char
-            
+
             if current.strip():
                 parts.append(current.strip())
-            
-            # Primera parte es el nombre de la variable
+
+            # parts = [var_name, (mensaje opcional), (tipo opcional)]
             var_name = parts[0]
+
+            # ---------------- MENSAJE ----------------
+            mensaje = ""
+            input_type = "string"  # default
+
+            # 2 o más parámetros: ver si el último es un tipo válido
+            valid_types = ["int", "float", "bool", "string"]
+
+            if len(parts) >= 2:
+                # ¿Es tipo válido el último parámetro?
+                last = parts[-1].lower()
+                if last in valid_types:
+                    input_type = last
+                    msg_parts = parts[1:-1]  # lo que queda es el mensaje
+                else:
+                    msg_parts = parts[1:]    # todo es mensaje
+                
+                # reconstruir mensaje (sin comillas)
+                if msg_parts:
+                    mensaje = " ".join(msg_parts)
+                    if mensaje.startswith('"') and mensaje.endswith('"'):
+                        mensaje = mensaje[1:-1]
             
-            # Si hay más partes, es el mensaje personalizado
-            if len(parts) > 1:
-                # Unir el resto como mensaje
-                mensaje = ' '.join(parts[1:])
-                # Limpiar comillas
-                if mensaje.startswith('"') and mensaje.endswith('"'):
-                    mensaje = mensaje[1:-1]
-                # Si hay mensaje personalizado, usar SOLO ese mensaje (sin agregar el nombre de la variable)
-                prompt = mensaje
-            else:
-                # Mensaje por defecto más amigable (solo si NO hay mensaje personalizado)
+            # Si no hay mensaje
+            if mensaje == "":
                 prompt = f"{var_name}: "
-            
-            # Solicitar input
+            else:
+                prompt = mensaje + " "
+
+            # ---------------- PEDIR INPUT ----------------
             user_input = self.input_handler(prompt)
-            
-            if user_input is None: # Usuario canceló
+
+            if user_input is None:
                 raise Exception("Entrada cancelada por el usuario.")
 
-            # Intentar convertir a número
-            try:
-                if '.' in user_input:
+            # ---------------- VALIDAR SEGÚN TIPO ----------------
+            def error_tipo():
+                raise Exception(f"Error: '{user_input}' no coincide con el tipo esperado '{input_type}'.")
+
+            if input_type == "int":
+                if "." in user_input:
+                    error_tipo()
+                if not user_input.lstrip("-").isdigit():
+                    error_tipo()
+                val = int(user_input)
+
+            elif input_type == "float":
+                try:
                     val = float(user_input)
-                else:
-                    val = int(user_input)
-            except:
-                val = user_input # Mantener como string si falla
-                
+                except:
+                    error_tipo()
+
+            elif input_type == "bool":
+                if user_input not in ["0", "1"]:
+                    error_tipo()
+                val = True if user_input == "1" else False
+
+            elif input_type == "string":
+                # Se guarda tal cual
+                val = user_input
+
+            # ---------------- GUARDAR Y CONTINUAR ----------------
             self.memory[var_name] = val
             self.pc += 1
             return
@@ -182,9 +201,7 @@ class VirtualMachine:
             return
 
         if line.startswith("IF_FALSE "):
-            # Formato: IF_FALSE <cond> GOTO <label>
             parts = line.split()
-            # parts[0]=IF_FALSE, parts[1]=var_cond, parts[2]=GOTO, parts[3]=label
             if len(parts) < 4:
                 raise Exception(f"Instrucción IF_FALSE mal formada: {line}")
             
@@ -193,7 +210,6 @@ class VirtualMachine:
             
             cond_val = self.get_value(cond_var)
             
-            # Si es falso (False, 0, None), saltamos
             if not cond_val: 
                 if label in self.labels:
                     self.pc = self.labels[label]
@@ -205,44 +221,49 @@ class VirtualMachine:
 
         # --- ASIGNACIONES Y OPERACIONES ---
         if "=" in line:
-            # Formato: target = op1 [operador binario] op2
-            # O: target = valor
             parts = line.split("=", 1)
             target = parts[0].strip()
             expr = parts[1].strip()
             
-            # Dividir la expresión por espacios
             expr_parts = expr.split()
             
-            if len(expr_parts) == 3:  # Operación binaria: v1 op v2
+            # NUEVO: Detectar conversión TO_INT
+            if len(expr_parts) == 2 and expr_parts[0] == "TO_INT":
+                # Formato: variable = TO_INT valor
+                val = self.get_value(expr_parts[1])
+                # Convertir a int (truncar si es float)
+                if isinstance(val, float):
+                    res = int(val)
+                elif isinstance(val, str):
+                    try:
+                        res = int(float(val))
+                    except:
+                        res = 0
+                else:
+                    res = int(val)
+                
+                self.memory[target] = res
+            
+            elif len(expr_parts) == 3:
+                # Operación binaria: v1 op v2
                 v1_str = expr_parts[0]
                 op = expr_parts[1]
                 v2_str = expr_parts[2]
                 
-                # Obtener valores (esto ahora busca en memoria correctamente)
                 v1 = self.get_value(v1_str)
                 v2 = self.get_value(v2_str)
                 
-                # Debug: Mostrar valores obtenidos
-                # print(f"Debug: {v1_str}={v1}, {v2_str}={v2}")
-                
-                # Realizar operación
                 res = self.compute_op(v1, op, v2)
                 
-                # Guardar resultado en memoria
                 self.memory[target] = res
-                
-                # Debug: Mostrar resultado
-                # print(f"Debug: {target} = {res}")
             
-            elif len(expr_parts) == 1:  # Asignación simple: target = valor
+            elif len(expr_parts) == 1:
+                # Asignación simple: target = valor
                 val = self.get_value(expr_parts[0])
                 self.memory[target] = val
-                # print(f"Debug: {target} = {val}")
             
             else:
-                # Expresión compleja o mal formada
-                # Intentar evaluar como está
+                # Expresión compleja
                 try:
                     val = self.get_value(expr.strip())
                     self.memory[target] = val
@@ -252,7 +273,6 @@ class VirtualMachine:
             self.pc += 1
             return
             
-        # Si llegamos aquí, instrucción desconocida
         self.pc += 1
 
     def compute_op(self, v1, op, v2):
@@ -260,7 +280,6 @@ class VirtualMachine:
         try:
             # Operaciones aritméticas
             if op == '+':
-                # Permitir concatenación de strings
                 if isinstance(v1, str) or isinstance(v2, str):
                     return str(v1) + str(v2)
                 return v1 + v2
@@ -271,6 +290,8 @@ class VirtualMachine:
             if op == '/':
                 if v2 == 0:
                     raise Exception("División por cero")
+                # IMPORTANTE: División normal (puede retornar float)
+                # La conversión a int se hace con TO_INT si es necesario
                 return v1 / v2
             if op == '%': 
                 return v1 % v2
@@ -297,7 +318,6 @@ class VirtualMachine:
             if op == '||': 
                 return bool(v1) or bool(v2)
             
-            # Operador desconocido
             raise Exception(f"Operador desconocido: {op}")
             
         except ZeroDivisionError:

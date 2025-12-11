@@ -2,15 +2,18 @@ from AnSem import ASTNode, DataType
 
 class IntermediateCodeGenerator:
     def __init__(self):
-        self.code = []          # Lista de instrucciones generadas
-        self.temp_counter = 0   # Contador para variables temporales (t1, t2...)
-        self.label_counter = 0  # Contador para etiquetas (L1, L2...)
+        self.code = []
+        self.temp_counter = 0
+        self.label_counter = 0
+        self.error_list = []
+        self.symbol_table = None  # NUEVO: Referencia a la tabla de símbolos
 
-    def generate(self, node):
+    def generate(self, node, symbol_table=None):
         """Genera código intermedio a partir del AST"""
         self.code = []
         self.temp_counter = 0
         self.label_counter = 0
+        self.symbol_table = symbol_table  # NUEVO: Guardar referencia
         if node:
             self.visit(node)
         return self.code
@@ -34,21 +37,17 @@ class IntermediateCodeGenerator:
         if not isinstance(node, ASTNode):
             return None
 
-        # Normalizar y obtener tanto tipo como posible lexema/valor
         raw_tipo = str(node.tipo) if hasattr(node, 'tipo') and node.tipo is not None else ""
         raw_valor = str(node.valor) if hasattr(node, 'valor') and node.valor is not None else ""
 
         node_type = raw_tipo.lower().strip().replace(" ", "")
         node_val = raw_valor.strip()
 
-        """quitar de las operaciones el (x), ejemplo +(x) -> +"""
         if node_type.endswith(")") and "(" in node_type:
             node_type = node_type[:node_type.index("(")]
         if node_val.endswith(")") and "(" in node_val:
             node_val = node_val[:node_val.index("(")]
-        #print("Cleaned node_type:", node_type, "node_val:", node_val)
 
-        # Detectar operadores por símbolo ya sea en tipo o en valor
         if node_type in ["+","-","*","/","%"] or node_val in ["+","-","*","/","%"]:
             method_name = 'visit_operacion'
         elif node_type in [">","<",">=","<=","==","!="] or node_val in [">","<",">=","<=","==","!="]:
@@ -56,16 +55,13 @@ class IntermediateCodeGenerator:
         elif node_type in ["&&","||"] or node_val in ["&&","||"]:
             method_name = 'visit_operacionlogica'
         else:
-            # Normal fallback: construir nombre de método a partir del tipo
             method_name = f'visit_{node_type}'
-
-        # Debug temporal (borra o comenta cuando ya funcione)
-        # print(f"DEBUG visit: tipo='{raw_tipo}' valor='{raw_valor}' -> método {method_name}")
 
         visitor = getattr(self, method_name, self.generic_visit)
         return visitor(node)
 
 
+    
     def generic_visit(self, node):
         """Visita genérica para nodos sin método específico"""
         for child in node.hijos:
@@ -90,55 +86,78 @@ class IntermediateCodeGenerator:
     # --- DECLARACIONES ---
     def visit_declaracion(self, node):
         """Genera código para declaración de variables solo si tiene una asignación"""
-        #print("Declaracion node con menos de 2 hijos:", node.hijos)
-
-        if len(node.hijos) <= 2:
-            return
+        # Verificar si hay una asignación en los hijos
+        has_assignment = any(h.tipo.lower() == "asignacion" for h in node.hijos)
+        if not has_assignment:
+            return  # No generar código si no hay asignación
         
-        # Obtener identificador y expresión
         id_node = node.hijos[1]
         expr_node = node.hijos[2]
         
-        # El identificador puede ser un nodo con id o valor
         identificador = id_node.id if hasattr(id_node, 'id') and id_node.id else id_node.valor
-        #print("Identificador declarado:", identificador)
+        
         # Calcular el valor de la expresión
         expr_temp = self.visit(expr_node)
         
+        # NUEVO: Obtener el tipo de la variable destino
+        var_type = self._get_variable_type(identificador)
+        
         # Generar la declaración con asignación
         if expr_temp:
-            self.emit(f"{identificador} = {expr_temp}")
+            # NUEVO: Agregar conversión a INT si es necesario
+            if var_type == DataType.INT:
+                self.emit(f"{identificador} = TO_INT {expr_temp}")
+            else:
+                self.emit(f"{identificador} = {expr_temp}")
         else:
-            # Si la expresión no retorna temporal, obtener el valor del nodo
             valor = self._get_node_value(expr_node)
             if valor:
-                self.emit(f"{identificador} = {valor}")
+                if var_type == DataType.INT:
+                    self.emit(f"{identificador} = TO_INT {valor}")
+                else:
+                    self.emit(f"{identificador} = {valor}")
 
     # --- ASIGNACIÓN ---
     def visit_asignacion(self, node):
         """Genera código para asignación: id = expresion"""
-
         if len(node.hijos) < 2:
             return
         
-        # Obtener identificador y expresión
         id_node = node.hijos[0]
         expr_node = node.hijos[1]
         
-        # El identificador puede ser un nodo con id o valor
         identificador = id_node.id if hasattr(id_node, 'id') and id_node.id else id_node.valor
         
         # Calcular el valor de la expresión
         expr_temp = self.visit(expr_node)
         
+        # NUEVO: Obtener el tipo de la variable destino
+        var_type = self._get_variable_type(identificador)
+        
         # Generar la asignación
         if expr_temp:
-            self.emit(f"{identificador} = {expr_temp}")
+            # NUEVO: Agregar conversión a INT si es necesario
+            if var_type == DataType.INT:
+                self.emit(f"{identificador} = TO_INT {expr_temp}")
+            else:
+                self.emit(f"{identificador} = {expr_temp}")
         else:
-            # Si la expresión no retorna temporal, obtener el valor del nodo
             valor = self._get_node_value(expr_node)
             if valor:
-                self.emit(f"{identificador} = {valor}")
+                if var_type == DataType.INT:
+                    self.emit(f"{identificador} = TO_INT {valor}")
+                else:
+                    self.emit(f"{identificador} = {valor}")
+
+    def _get_variable_type(self, var_name):
+        """Obtiene el tipo de una variable desde la tabla de símbolos"""
+        if self.symbol_table is None:
+            return None
+        
+        symbol = self.symbol_table.lookup(var_name)
+        if symbol:
+            return symbol.data_type
+        return None
 
     # --- ENTRADA / SALIDA ---
     def visit_cin(self, node):
@@ -177,12 +196,24 @@ class IntermediateCodeGenerator:
                 identificador = id_nodo.tipo[3:-1]  # Extraer de "ID(x)"
             
             if identificador:
-                # Si hay mensaje, incluirlo en la instrucción
+                # Si hay mensaje, incluirlo en la instrucción y su tipo de dato
+                valor_tipo = self._get_variable_type(identificador)
+                if valor_tipo == DataType.INT:
+                    tipo = "int"
+                elif valor_tipo == DataType.FLOAT:
+                    tipo = "float"
+                elif valor_tipo == DataType.STRING:
+                    tipo = "string"
+                elif valor_tipo == DataType.BOOL:
+                    tipo = "bool"
+                else:
+                    tipo = "error"
                 if mensaje_partes:
                     mensaje = ' '.join(mensaje_partes)
-                    self.emit(f"READ {identificador} {mensaje}")
+                    # agregar tipo de dato al mensaje
+                    self.emit(f"READ {identificador} {mensaje} {tipo}")
                 else:
-                    self.emit(f"READ {identificador}")
+                    self.emit(f"READ {identificador} {tipo}")
 
     def visit_cout(self, node):
         """Genera código para salida: cout << expresion (múltiples elementos en la misma línea)"""
@@ -218,53 +249,40 @@ class IntermediateCodeGenerator:
         if len(node.hijos) < 2:
             return None
 
-        # Visitar hijos izquierdo y derecho (intentar generar temporales)
-        #print("hijos de operacion:", node.hijos)
         left_temp = self.visit(node.hijos[0])
         right_temp = self.visit(node.hijos[1])
 
-
-        # Si la visita devolvió None, intentar obtener valor directo
         if left_temp is None:
             left_temp = self._get_node_value(node.hijos[0])
         if right_temp is None:
             right_temp = self._get_node_value(node.hijos[1])
 
-        # Si aún no hay operandos válidos, abortar
         if left_temp is None or right_temp is None:
             return None
 
-        # Crear temporal para el resultado
         result_temp = self.new_temp()
 
-        # Emitir instrucción (asegurarse de que op sea el símbolo correcto)
         op_sym = op if isinstance(op, str) and op.strip() else node.tipo
 
-        # quitar ()
         if op_sym.endswith(")") and "(" in op_sym:
             op_sym = op_sym[:op_sym.index("(")]
 
+        # IMPORTANTE: Aquí NO truncamos, solo generamos la operación normal
         self.emit(f"{result_temp} = {left_temp} {op_sym} {right_temp}")
 
         return result_temp
-
-
+    
     def _get_node_value(self, node):
         """Obtiene el valor de un nodo (número, identificador, etc)"""
-        # CORRECCIÓN PRINCIPAL: Primero verificar si tiene 'id' (para identificadores)
         if hasattr(node, 'id') and node.id:
             id_val = str(node.id)
-            # Limpiar formato ID(x)
             if id_val.startswith('ID(') and id_val.endswith(')'):
                 return id_val[3:-1]
             elif id_val.startswith('id(') and id_val.endswith(')'):
                 return id_val[3:-1]
             return id_val
         
-        # Luego verificar si tiene 'valor'
         if hasattr(node, 'valor') and node.valor is not None:
-            # Si el valor es una cadena que representa el tipo de nodo (como "id(x)"),
-            # extraer solo el identificador
             valor_str = str(node.valor)
             if valor_str.startswith('id(') and valor_str.endswith(')'):
                 return valor_str[3:-1]
@@ -272,14 +290,12 @@ class IntermediateCodeGenerator:
                 return valor_str[3:-1]
             return valor_str
         
-        # Si el tipo del nodo empieza con "id(" o "ID(", extraer el identificador
         if hasattr(node, 'tipo') and node.tipo:
             tipo_str = str(node.tipo)
             if tipo_str.startswith('id(') and tipo_str.endswith(')'):
                 return tipo_str[3:-1]
             elif tipo_str.startswith('ID(') and tipo_str.endswith(')'):
                 return tipo_str[3:-1]
-            # Si el tipo es un tipo de dato básico, intentar obtener el valor
             if tipo_str in ['entero', 'flotante', 'cadena', 'booleano']:
                 if hasattr(node, 'valor'):
                     return str(node.valor)
@@ -303,15 +319,7 @@ class IntermediateCodeGenerator:
 
     # --- INCREMENTO / DECREMENTO ---
     def visit_incremento(self, node):
-        """Genera código para incremento: x++
-            incremento ++
-                ID(x)   
-                asignacion
-                    ID(x)
-                    +(1)
-                        ID(x)
-                        entero
-        """
+        """Genera código para incremento: x++"""
         #print("Incremento node:", node)
         if node.hijos and node.hijos[1].hijos:
             id_node = node.hijos[1].hijos[0]  # x++ -> asignacion -> id
@@ -523,17 +531,7 @@ class IntermediateCodeGenerator:
 
     def visit_for(self, node):
         """Genera código para for
-        for (init; condicion; incremento) { cuerpo }
-        
-        Se traduce a:
-            init
-            LABEL L_start
-            IF_FALSE condicion GOTO L_end
-            cuerpo
-            incremento
-            GOTO L_start
-            LABEL L_end
-        """
+        for (init; condicion; incremento) { cuerpo } """
         if len(node.hijos) < 4:
             return
         

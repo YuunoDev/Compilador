@@ -1,10 +1,12 @@
 START
-x = 2
+x = 5
+t1 = x DIV_INT 2
+r = t1
 i = 0
 LABEL L1
-t1 = i < 10
-IF_FALSE t1 GOTO L2
-PRINT x
+t2 = i < 10
+IF_FALSE t2 GOTO L2
+PRINT r
 i = i + 1
 GOTO L1
 LABEL L2
