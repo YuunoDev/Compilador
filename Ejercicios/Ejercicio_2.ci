@@ -1,6 +1,6 @@
 START
-READ categoria "Dame la categoria del trabajador: " [INT]
-READ sueldo "Dame el sueldo del trabajador: " [INT]
+READ categoria "Dame la categoria del trabajador: " int
+READ sueldo "Dame el sueldo del trabajador: " int
 t1 = categoria == 1
 IF_FALSE t1 GOTO L1
 t2 = sueldo * 15

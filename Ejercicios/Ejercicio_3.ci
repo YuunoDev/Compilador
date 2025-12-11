@@ -1,7 +1,7 @@
 START
-READ a "Dame primer numero: "
-READ b "Dame segundo numero: "
-READ c "Dame tercer numero: "
+READ a "Dame primer numero: " int
+READ b "Dame segundo numero: " int
+READ c "Dame tercer numero: " int
 t1 = a == b
 t2 = b == c
 t3 = t1 && t2
