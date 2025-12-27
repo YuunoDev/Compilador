@@ -1,0 +1,9 @@
+main {
+	int x;
+	cin >> "Ingrese edad: " >> x;
+
+	int y;
+	y = x + 1;
+	cout << "resultado: " << y << " y Resultado de x: " << x;
+	
+}

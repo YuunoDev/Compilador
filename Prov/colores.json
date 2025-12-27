@@ -1,0 +1,13 @@
+{
+    "IDENTIFICADOR": "#C678DD",   
+    "OTRO": "#ABB2BF",            
+    "OPERADOR": "#56B6C2",        
+    "NUMERO": "#D19A66",          
+    "ASIGNACION": "#E5C07B",      
+    "CADENA": "#98C379",          
+    "COMENTARIO": "#5C6370",      
+    "COMPARACION": "#56B6C2",     
+    "SIMBOLO": "#61AFEF",         
+    "LOGICO": "#BE5046",          
+    "RESERVADA": "#61AFEF"        
+}

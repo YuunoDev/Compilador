@@ -1,0 +1,48 @@
+main{
+/*Construya un programa tal que dado como datos la categoría 
+y el sueldo de un trabajador, calcule el aumento correspondiente 
+teniendo en cuenta la siguiente tabla.
+Imprima la categoría del trabajador y su nuevo sueldo.
+
+Tabla de aumentos:
+- Categoría 1: 15%
+- Categoría 2: 10%
+- Categoría 3: 8%
+- Categoría 4: 7%
+*/
+
+    int categoria, sueldo;
+    float aumento, sueldo_nuevo;
+    
+    cin >> "Dame la categoria del trabajador: " >> categoria;
+    cin >> "Dame el sueldo del trabajador: " >> sueldo;
+    
+    if (categoria == 1)
+        aumento = sueldo * 15 / 100;
+    end
+    
+    if (categoria == 2)
+        aumento = sueldo * 10 / 100;
+    end
+    
+    if (categoria == 3)
+        aumento = sueldo * 8 / 100;
+    end
+    
+    if (categoria == 4)
+        aumento = sueldo * 7 / 100;
+    end
+
+    if (categoria >= 5 || categoria <= 0)
+        cout << "Categoria no encontrada";
+    end
+    
+    sueldo_nuevo = sueldo + aumento;
+
+    cout << "";
+    cout << "=====RESULTADO=====";
+    cout << "Categoria: " << categoria;
+    cout << "Sueldo anterior: " << sueldo;
+    cout << "Aumento: " << aumento;
+    cout << "Nuevo sueldo: " << sueldo_nuevo;
+}

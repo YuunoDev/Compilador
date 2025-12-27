@@ -1,0 +1,14 @@
+main {
+    // Construya un programa tal que dado como datos la base y la altura de un rectángulo,
+    // calcule el perímetro y el área del mismo.
+    int b,a;
+    cin >> "Dame la base: " >> b;
+    cin >> "Dame la altura: " >> a;
+    int per, area;
+    per = 2 * (b+a);
+    area = b*a;
+    cout << "";
+    cout << "RESULTADOS:";
+    cout << "Area: " << area;
+    cout << "Perimetro: " << per;
+}
